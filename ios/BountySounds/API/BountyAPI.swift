@@ -1,0 +1,32 @@
+import Foundation
+
+// The app's edge. Screens talk to this protocol only; `MockBountyAPI` serves
+// the design-prototype fixtures, and a URLSession implementation against the
+// backend's /v1 REST surface slots in behind the same shape (every mutating
+// call there carries an Idempotency-Key).
+protocol BountyAPI: Sendable {
+    func fetchBoard() async throws -> [Bounty]
+    func fetchCaptured(bountyId: String) async throws -> [CapturedClip]
+    func fetchContractRules(bountyId: String) async throws -> [String]
+
+    func claimBounty(id: String) async throws
+    func updateChecklist(bountyId: String, done: [Bool]) async throws
+    func lodgeSubmission(bountyId: String, videoURL: String) async throws -> [SubmissionCheck]
+    func fetchChecklistSteps() async throws -> [ChecklistStep]
+    func fetchReviewing() async throws -> [ReviewingClaim]
+    func fetchEvidence() async throws -> [EvidenceRow]
+    func sendAppeal(statement: String) async throws
+
+    func fetchPurse() async throws -> (payable: String, pending: String, lifetime: String)
+    func fetchLedger() async throws -> [LedgerRow]
+    func cashOut() async throws
+
+    func fetchWire() async throws -> [WireItem]
+    func fetchRoster() async throws -> [RosterRow]
+    func fetchSettings() async throws -> [SettingRow]
+
+    func fetchArtistSubmissions() async throws -> [ArtistSubmission]
+    func submitVerdict(submissionId: String, verdict: Verdict) async throws
+    func postBounty(purseCents: Int, model: PayoutModel) async throws
+    func topUpPurse(bountyId: String, amountCents: Int) async throws
+}
