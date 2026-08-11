@@ -144,6 +144,7 @@ struct MockBountyAPI: BountyAPI {
     }
 
     func submitVerdict(submissionId: String, verdict: Verdict) async throws {}
-    func postBounty(purseCents: Int, model: PayoutModel) async throws {}
-    func topUpPurse(bountyId: String, amountCents: Int) async throws {}
+    func postBounty(purseCents: Int, model: PayoutModel) async throws -> String? { nil }
+    func topUpPurse(bountyId: String, amountCents: Int) async throws -> String? { nil }
+    func payoutOnboardingLink() async throws -> URL? { nil }
 }

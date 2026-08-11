@@ -20,6 +20,8 @@ protocol BountyAPI: Sendable {
     func fetchPurse() async throws -> (payable: String, pending: String, lifetime: String)
     func fetchLedger() async throws -> [LedgerRow]
     func cashOut() async throws
+    // Stripe Express onboarding URL for the payout method (nil in mock mode).
+    func payoutOnboardingLink() async throws -> URL?
 
     func fetchWire() async throws -> [WireItem]
     func fetchRoster() async throws -> [RosterRow]
@@ -27,6 +29,8 @@ protocol BountyAPI: Sendable {
 
     func fetchArtistSubmissions() async throws -> [ArtistSubmission]
     func submitVerdict(submissionId: String, verdict: Verdict) async throws
-    func postBounty(purseCents: Int, model: PayoutModel) async throws
-    func topUpPurse(bountyId: String, amountCents: Int) async throws
+    // Both return a Stripe PaymentIntent client secret to confirm in
+    // PaymentSheet, or nil when no payment step is needed (mock mode).
+    func postBounty(purseCents: Int, model: PayoutModel) async throws -> String?
+    func topUpPurse(bountyId: String, amountCents: Int) async throws -> String?
 }

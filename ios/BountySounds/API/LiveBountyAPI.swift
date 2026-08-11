@@ -300,10 +300,8 @@ struct LiveBountyAPI: BountyAPI {
                               idempotent: true)
     }
 
-    func postBounty(purseCents: Int, model: PayoutModel) async throws {
-        // TODO(launch): pipe the returned PaymentIntent client secret into
-        // Stripe PaymentSheet; the bounty goes live on the webhook.
-        _ = try await request("POST", "v1/bounties", body: [
+    func postBounty(purseCents: Int, model: PayoutModel) async throws -> String? {
+        let body = try json(try await request("POST", "v1/bounties", body: [
             "soundId": "", // sound picker lands with the TikTok sound-link flow
             "title": "Clip the Thursday stream",
             "payoutModel": model == .perClip ? "per_clip" : "per_view",
@@ -311,12 +309,19 @@ struct LiveBountyAPI: BountyAPI {
             "rateUnit": 5000,
             "purseCents": purseCents,
             "deadlineAt": ISO8601DateFormatter().string(from: Date().addingTimeInterval(14 * 86400)),
-        ], idempotent: true)
+        ], idempotent: true))
+        return body["clientSecret"] as? String
     }
 
-    func topUpPurse(bountyId: String, amountCents: Int) async throws {
-        _ = try await request("POST", "v1/bounties/\(bountyId)/topups",
-                              body: ["amountCents": amountCents], idempotent: true)
+    func topUpPurse(bountyId: String, amountCents: Int) async throws -> String? {
+        let body = try json(try await request("POST", "v1/bounties/\(bountyId)/topups",
+                                              body: ["amountCents": amountCents], idempotent: true))
+        return body["clientSecret"] as? String
+    }
+
+    func payoutOnboardingLink() async throws -> URL? {
+        let body = try json(try await request("POST", "v1/me/payout-account", idempotent: true))
+        return (body["onboardingUrl"] as? String).flatMap(URL.init(string:))
     }
 }
 

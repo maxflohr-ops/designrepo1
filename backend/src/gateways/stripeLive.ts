@@ -58,4 +58,23 @@ export class LiveStripe implements StripeGateway {
     });
     return { id: re.id as string };
   }
+
+  async createExpressAccount(meta: Record<string, string>) {
+    const acct = await this.call("accounts", {
+      type: "express",
+      "capabilities[transfers][requested]": "true",
+      ...Object.fromEntries(Object.entries(meta).map(([k, v]) => [`metadata[${k}]`, v])),
+    });
+    return { id: acct.id as string };
+  }
+
+  async createAccountLink(accountId: string, refreshUrl: string, returnUrl: string) {
+    const link = await this.call("account_links", {
+      account: accountId,
+      refresh_url: refreshUrl,
+      return_url: returnUrl,
+      type: "account_onboarding",
+    });
+    return { url: link.url as string };
+  }
 }

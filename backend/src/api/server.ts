@@ -252,6 +252,24 @@ export function buildServer(deps: Deps) {
     return { claims: rows };
   });
 
+  // Payout onboarding: create (or reuse) the clipper's Stripe Express
+  // account and hand back a hosted onboarding link. Transfers on cash-out go
+  // to this account once Stripe finishes KYC.
+  app.post("/v1/me/payout-account", async (req, reply) => {
+    const me = await auth(req);
+    await withIdempotency(req, reply, me.id, async () => {
+      let accountId = me.payout_method_id as string | null;
+      if (!accountId) {
+        accountId = (await deps.stripe.createExpressAccount({ accountId: me.id })).id;
+        await pool.query("update account set payout_method_id = $2 where id = $1", [me.id, accountId]);
+      }
+      const base = process.env.PUBLIC_WEB_URL ?? "https://bountysounds.com";
+      const { url } = await deps.stripe.createAccountLink(
+        accountId, `${base}/payout/refresh`, `${base}/payout/done`);
+      return { status: 201, body: { accountId, onboardingUrl: url } };
+    });
+  });
+
   app.get("/v1/me/wire", async (req) => {
     const me = await auth(req);
     return { items: await listWire(pool, me.id) };

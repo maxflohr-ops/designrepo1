@@ -155,6 +155,27 @@ describe("production wiring", () => {
     expect(right.statusCode).toBe(201);
   });
 
+  it("creates an Express account once and returns an onboarding link", async () => {
+    const clipper = await login("payout_clip");
+    const first = await app.inject({
+      method: "POST", url: "/v1/me/payout-account", headers: { ...clipper.h, ...idem() },
+    });
+    expect(first.statusCode).toBe(201);
+    const { accountId, onboardingUrl } = first.json();
+    expect(accountId).toMatch(/^acct_/);
+    expect(onboardingUrl).toContain("connect.stripe.com");
+
+    // second call reuses the same connected account
+    const second = await app.inject({
+      method: "POST", url: "/v1/me/payout-account", headers: { ...clipper.h, ...idem() },
+    });
+    expect(second.json().accountId).toBe(accountId);
+    expect(stripe.expressAccounts).toHaveLength(1);
+    const { rows: [a] } = await pool.query(
+      "select payout_method_id from account where id = $1", [clipper.account.id]);
+    expect(a.payout_method_id).toBe(accountId);
+  });
+
   it("rate limits the auth endpoint per IP", async () => {
     const ip = "10.200.1.1";
     let last = 0;

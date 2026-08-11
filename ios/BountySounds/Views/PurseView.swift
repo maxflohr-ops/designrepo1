@@ -82,11 +82,18 @@ struct PurseView: View {
                     .font(.grotesk(14.5))
                     .foregroundStyle(Color.ink)
                 Spacer()
-                Text("change")
-                    .font(.mono(10))
-                    .foregroundStyle(Color.olive)
+                Button {
+                    state.openPayoutOnboarding()
+                } label: {
+                    Text("change")
+                        .font(.mono(10))
+                        .foregroundStyle(Color.olive)
+                        .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
-            .padding(.top, 10)
+            .padding(.top, 2)
             Text("Stripe and USDC also available. Face ID confirms every cash-out.")
                 .font(.grotesk(12.5))
                 .foregroundStyle(Color.muted)

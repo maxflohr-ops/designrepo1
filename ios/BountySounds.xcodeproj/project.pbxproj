@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		0DD0000000000000000000E3 /* StripePaymentSheet in Frameworks */ = {isa = PBXBuildFile; productRef = 0DD0000000000000000000E2 /* StripePaymentSheet */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		0DD0000000000000000000B2 /* BountySounds.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BountySounds.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -36,6 +40,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0DD0000000000000000000E3 /* StripePaymentSheet in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +83,7 @@
 			);
 			name = BountySounds;
 			packageProductDependencies = (
+				0DD0000000000000000000E2 /* StripePaymentSheet */,
 			);
 			productName = BountySounds;
 			productReference = 0DD0000000000000000000B2 /* BountySounds.app */;
@@ -109,6 +115,9 @@
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0DD0000000000000000000A3 /* Products */;
+			packageReferences = (
+				0DD0000000000000000000E1 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -136,6 +145,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		0DD0000000000000000000E1 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stripe/stripe-ios-spm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 24.7.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0DD0000000000000000000E2 /* StripePaymentSheet */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0DD0000000000000000000E1 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */;
+			productName = StripePaymentSheet;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		0DD0000000000000000000D2 /* Debug */ = {

@@ -12,6 +12,10 @@ export interface StripeGateway {
   createTransfer(amountCents: number, connectedAccountId: string, meta: Record<string, string>): Promise<{ id: string }>;
   // Refund of the unspent purse to the original payment method.
   createRefund(paymentIntentId: string, amountCents: number): Promise<{ id: string }>;
+  // Clipper payout onboarding: an Express connected account + a hosted
+  // onboarding link where Stripe collects KYC and bank details.
+  createExpressAccount(meta: Record<string, string>): Promise<{ id: string }>;
+  createAccountLink(accountId: string, refreshUrl: string, returnUrl: string): Promise<{ url: string }>;
 }
 
 export class FakeStripe implements StripeGateway {
@@ -34,4 +38,13 @@ export class FakeStripe implements StripeGateway {
     this.refunds.push({ id, paymentIntentId, amountCents });
     return { id };
   }
+  async createExpressAccount(meta: Record<string, string>) {
+    const id = `acct_${randomUUID().slice(0, 8)}`;
+    this.expressAccounts.push({ id, meta });
+    return { id };
+  }
+  async createAccountLink(accountId: string, _refreshUrl: string, _returnUrl: string) {
+    return { url: `https://connect.stripe.com/express/onboard/test/${accountId}` };
+  }
+  expressAccounts: { id: string; meta: Record<string, string> }[] = [];
 }

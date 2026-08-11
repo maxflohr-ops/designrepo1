@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum Screen: Equatable {
     case onboard, board, detail, claims, dispute, submit, purse, alerts, me, roster, post, review
@@ -185,8 +186,33 @@ final class AppState: ObservableObject {
     // -- artist mode ----------------------------------------------------------
 
     func fundPurse() {
-        Task { try? await api.postBounty(purseCents: purseSelection * 100, model: payoutModel) }
-        flash("Purse funded. The contract is live on the board.", goTo: .review)
+        Task {
+            do {
+                let clientSecret = try await api.postBounty(
+                    purseCents: purseSelection * 100, model: payoutModel)
+                if let clientSecret {
+                    // live mode: collect payment in PaymentSheet; the bounty
+                    // goes live when the webhook lands
+                    guard await PurseFunding.present(clientSecret: clientSecret) else {
+                        flash("Payment didn't go through. The purse wasn't funded.")
+                        return
+                    }
+                }
+                flash("Purse funded. The contract is live on the board.", goTo: .review)
+            } catch {
+                flash("Couldn't post the bounty. Try again.")
+            }
+        }
+    }
+
+    func openPayoutOnboarding() {
+        Task {
+            if let url = try? await api.payoutOnboardingLink(), let url {
+                await UIApplication.shared.open(url)
+            } else {
+                flash("Payout methods are managed in live mode.")
+            }
+        }
     }
 
     func approve(_ submission: ArtistSubmission) {
@@ -202,9 +228,21 @@ final class AppState: ObservableObject {
     }
 
     func topUp() {
-        purseSelection += 250
-        Task { try? await api.topUpPurse(bountyId: current?.id ?? "", amountCents: 25_000) }
-        flash("Purse topped up by $250.")
+        Task {
+            do {
+                let clientSecret = try await api.topUpPurse(bountyId: current?.id ?? "", amountCents: 25_000)
+                if let clientSecret {
+                    guard await PurseFunding.present(clientSecret: clientSecret) else {
+                        flash("Payment didn't go through. The top-up was cancelled.")
+                        return
+                    }
+                }
+                purseSelection += 250
+                flash("Purse topped up by $250.")
+            } catch {
+                flash("Couldn't top up the purse. Try again.")
+            }
+        }
     }
 
     var pendingReviewCount: Int { artistSubmissions.filter { verdicts[$0.id] == nil }.count }
