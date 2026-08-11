@@ -22,6 +22,25 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>BSAPIBaseURL</key>
+	<string></string>
+	<key>BSTikTokClientKey</key>
+	<string></string>
+	<key>BSTikTokRedirectURI</key>
+	<string></string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.bountysounds.ios.oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>bountysounds</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Face ID confirms every cash-out before money leaves your purse.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Fredericka_the_Great.ttf</string>

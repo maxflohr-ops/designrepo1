@@ -11,7 +11,9 @@ enum Mode { case clipper, artist }
 // purse amount + payout model, toast string.
 @MainActor
 final class AppState: ObservableObject {
-    let api: BountyAPI
+    private(set) var api: BountyAPI
+    private let tiktokAuth = TikTokAuth()
+    @Published var isAuthenticating = false
 
     @Published var screen: Screen = .onboard
     @Published var mode: Mode = .clipper
@@ -41,8 +43,17 @@ final class AppState: ObservableObject {
 
     private var toastTask: Task<Void, Never>?
 
-    init(api: BountyAPI = MockBountyAPI()) {
-        self.api = api
+    init(api: BountyAPI? = nil) {
+        if let api {
+            self.api = api
+        } else if AppConfig.isLive, let baseURL = AppConfig.apiBaseURL,
+                  let token = Keychain.load(AppConfig.sessionKeychainKey) {
+            // restored session: skip onboarding straight to the board
+            self.api = LiveBountyAPI(baseURL: baseURL, token: token)
+            self.screen = .board
+        } else {
+            self.api = MockBountyAPI()
+        }
         Task { await load() }
     }
 
@@ -92,8 +103,47 @@ final class AppState: ObservableObject {
         }
     }
 
-    func enterClipper() { mode = .clipper; screen = .board }
-    func enterArtist() { mode = .artist; screen = .post }
+    // Onboarding CTAs. In mock mode they jump straight in (the design demo);
+    // in live mode they run TikTok Login Kit first.
+    func enterClipper() { enter(.clipper) }
+    func enterArtist() { enter(.artist) }
+
+    private func enter(_ newMode: Mode) {
+        guard AppConfig.isLive else {
+            mode = newMode
+            screen = newMode == .clipper ? .board : .post
+            return
+        }
+        Task { await signIn(role: newMode) }
+    }
+
+    func signIn(role: Mode) async {
+        guard let baseURL = AppConfig.apiBaseURL, !isAuthenticating else { return }
+        isAuthenticating = true
+        defer { isAuthenticating = false }
+        do {
+            let code = try await tiktokAuth.authorize()
+            let token = try await TikTokAuth.exchange(
+                code: code, role: role == .artist ? "artist" : "clipper", baseURL: baseURL)
+            Keychain.save(token, for: AppConfig.sessionKeychainKey)
+            api = LiveBountyAPI(baseURL: baseURL, token: token)
+            await load()
+            mode = role
+            screen = role == .clipper ? .board : .post
+        } catch {
+            flash("TikTok sign-in didn't go through. Try again.")
+        }
+    }
+
+    func signOut() {
+        Keychain.delete(AppConfig.sessionKeychainKey)
+        api = MockBountyAPI()
+        mode = .clipper
+        screen = .onboard
+        verdicts = [:]
+        checklistDone = [true, false, false, false]
+        Task { await load() }
+    }
 
     func setMode(_ newMode: Mode) {
         mode = newMode

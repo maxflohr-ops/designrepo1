@@ -253,7 +253,25 @@ struct LiveBountyAPI: BountyAPI {
     }
 
     func fetchRoster() async throws -> [RosterRow] {
-        try await fallback.fetchRoster() // needs GET /v1/roster — tracked in docs/LAUNCH.md
+        let body = try json(try await request("GET", "v1/roster"))
+        let rows = body["roster"] as? [[String: Any]] ?? []
+        return rows.map { r in
+            let handle = r["handle"] as? String ?? ""
+            let isYou = r["isYou"] as? Bool ?? false
+            let views = r["paid_views"] as? Int ?? 0
+            let viewsLabel = views >= 1_000_000
+                ? String(format: "%.1fm", Double(views) / 1_000_000)
+                : "\(views / 1000)k"
+            return RosterRow(
+                id: r["id"] as? String ?? UUID().uuidString,
+                rank: String(format: "%02d", r["rank"] as? Int ?? 0),
+                initials: String(handle.prefix(2)).uppercased(),
+                handle: isYou ? "\(handle) · you" : handle,
+                meta: "\(viewsLabel) paid views · \(r["bounties"] as? Int ?? 0) bounties",
+                points: (r["points"] as? Int ?? 0).formatted(),
+                isYou: isYou
+            )
+        }
     }
 
     func fetchSettings() async throws -> [SettingRow] {

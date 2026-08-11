@@ -1,4 +1,5 @@
 import type { TikTokClient, TikTokProfile, TikTokVideo } from "./tiktok.js";
+import { getTikTokTokens, saveTikTokTokens } from "../modules/identity/tokens.js";
 
 // Production TikTok client over the Display API + Login Kit.
 //
@@ -20,11 +21,42 @@ export class LiveTikTok implements TikTokClient {
   constructor(
     private clientKey = process.env.TIKTOK_CLIENT_KEY ?? "",
     private clientSecret = process.env.TIKTOK_CLIENT_SECRET ?? "",
-    // access-token lookup per video owner, backed by the identity module
-    private tokenFor: (openId: string) => Promise<string | null> = async () => null,
+    // access-token lookup per video owner; defaults to the identity module's
+    // token store with automatic refresh
+    private tokenFor?: (openId: string) => Promise<string | null>,
   ) {
     if (!this.clientKey || !this.clientSecret)
       throw new Error("TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET are not set");
+    this.tokenFor ??= (openId) => this.storedToken(openId);
+  }
+
+  // Read the stored token; refresh through TikTok's token endpoint when it's
+  // inside a minute of expiry.
+  private async storedToken(openId: string): Promise<string | null> {
+    const stored = await getTikTokTokens(openId);
+    if (!stored) return null;
+    if (stored.expiresAt.getTime() > Date.now() + 60_000) return stored.accessToken;
+    if (!stored.refreshToken) return null;
+    const res = await fetch("https://open.tiktokapis.com/v2/oauth/token/", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_key: this.clientKey,
+        client_secret: this.clientSecret,
+        grant_type: "refresh_token",
+        refresh_token: stored.refreshToken,
+      }).toString(),
+    });
+    const body = (await res.json()) as {
+      access_token?: string; refresh_token?: string; expires_in?: number;
+    };
+    if (!res.ok || !body.access_token) return null;
+    await saveTikTokTokens(openId, {
+      accessToken: body.access_token,
+      refreshToken: body.refresh_token,
+      expiresInSec: body.expires_in ?? 3600,
+    });
+    return body.access_token;
   }
 
   async exchangeCode(code: string) {
@@ -40,14 +72,19 @@ export class LiveTikTok implements TikTokClient {
       }).toString(),
     });
     const body = (await res.json()) as {
-      access_token?: string; open_id?: string; error?: string; error_description?: string;
+      access_token?: string; refresh_token?: string; expires_in?: number;
+      open_id?: string; scope?: string; error?: string; error_description?: string;
     };
-    if (!res.ok || !body.open_id)
+    if (!res.ok || !body.open_id || !body.access_token)
       throw new Error(`tiktok oauth: ${body.error ?? res.status} — ${body.error_description ?? ""}`);
-    const info = await this.userInfo(body.access_token!);
+    await saveTikTokTokens(body.open_id, {
+      accessToken: body.access_token,
+      refreshToken: body.refresh_token,
+      expiresInSec: body.expires_in ?? 3600,
+      scopes: body.scope?.split(",") ?? [],
+    });
+    const info = await this.userInfo(body.access_token);
     return { openId: body.open_id, handle: info.handle };
-    // NOTE: persist access_token/refresh_token via the identity module so
-    // tokenFor() can serve the counting job.
   }
 
   private async userInfo(accessToken: string): Promise<{ handle: string }> {
@@ -60,7 +97,7 @@ export class LiveTikTok implements TikTokClient {
   }
 
   async getProfile(openId: string): Promise<TikTokProfile | null> {
-    const token = await this.tokenFor(openId);
+    const token = await this.tokenFor!(openId);
     if (!token) return null;
     const res = await fetch(
       "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,follower_count",
@@ -86,7 +123,7 @@ export class LiveTikTok implements TikTokClient {
   // so the counting job can find the right token without a schema change.
   async getVideo(videoId: string): Promise<TikTokVideo | null> {
     const [openId, id] = videoId.includes(":") ? videoId.split(":", 2) : [null, videoId];
-    const token = openId ? await this.tokenFor(openId) : null;
+    const token = openId ? await this.tokenFor!(openId) : null;
     if (!token || !id) return null;
     const res = await fetch(
       "https://open.tiktokapis.com/v2/video/query/?fields=id,view_count,share_url,create_time,music_id",

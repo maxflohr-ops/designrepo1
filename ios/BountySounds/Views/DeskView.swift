@@ -90,6 +90,7 @@ struct DeskView: View {
     private func settingRow(_ row: SettingRow) -> some View {
         Button {
             if row.title == "The roster" { state.screen = .roster }
+            else if row.title == "Sign out" { state.signOut() }
         } label: {
             VStack(spacing: 0) {
                 HStack {

@@ -22,7 +22,9 @@ struct OnboardingView: View {
             Spacer()
 
             VStack(spacing: 10) {
-                StampButton(title: "Continue with TikTok") { state.enterClipper() }
+                StampButton(title: state.isAuthenticating ? "Opening TikTok…" : "Continue with TikTok") {
+                    state.enterClipper()
+                }
                 StampButton(title: "I'm posting a bounty", fill: .clear, textColor: .ink, border: .ink) {
                     state.enterArtist()
                 }
@@ -31,6 +33,8 @@ struct OnboardingView: View {
                     .foregroundStyle(Color.olive)
                     .padding(.top, 4)
             }
+            .disabled(state.isAuthenticating)
+            .opacity(state.isAuthenticating ? 0.6 : 1)
             .padding(.bottom, 16)
         }
         .padding(.horizontal, 24)

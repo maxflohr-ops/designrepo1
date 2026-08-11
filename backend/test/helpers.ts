@@ -20,8 +20,12 @@ export async function resetDb() {
   await migrate();
   await pool.query(`
     truncate wire_item, idempotency_key, ledger_entry, dispute, view_sample,
-             submission, claim, bounty, sound, device_push_token, session, account
+             submission, claim, bounty, sound, device_push_token, session, account,
+             tiktok_token, attest_key
     restart identity cascade`);
+  const { redis } = await import("../src/redis.js");
+  const rateKeys = await redis.keys("rate:*");
+  if (rateKeys.length) await redis.del(rateKeys);
 }
 
 export async function mkAccount(handle: string, roles = ["clipper"], openId = `oid_${handle}`) {

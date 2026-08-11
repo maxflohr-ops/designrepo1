@@ -9,6 +9,10 @@ import { listWire } from "../modules/notify/service.js";
 import type { StripeGateway } from "../gateways/stripe.js";
 import type { TikTokClient } from "../gateways/tiktok.js";
 import { withIdempotency } from "./idempotency.js";
+import { verifyStripeSignature } from "./stripeSignature.js";
+import { rateLimit } from "./rateLimit.js";
+import { hasAttestKeys, isRegisteredAttestKey, registerAttestKey } from "../modules/identity/tokens.js";
+import { redis } from "../redis.js";
 
 export interface Deps {
   stripe: StripeGateway;
@@ -23,6 +27,17 @@ export function buildServer(deps: Deps) {
 
   const app = Fastify({ logger: process.env.NODE_ENV !== "test" });
 
+  // Keep the raw body around: Stripe signs the exact bytes it sends, so the
+  // webhook route must verify against the unparsed payload.
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
+    (req as { rawBody?: string }).rawBody = body as string;
+    try {
+      done(null, body === "" ? null : JSON.parse(body as string));
+    } catch (err) {
+      done(err as Error);
+    }
+  });
+
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof ApiError)
       return reply.code(err.status).send({ error: err.code, message: err.message });
@@ -35,10 +50,45 @@ export function buildServer(deps: Deps) {
 
   // -- identity --------------------------------------------------------------
 
+  app.get("/healthz", async () => {
+    await pool.query("select 1");
+    await redis.ping();
+    return { ok: true };
+  });
+
   app.post("/v1/auth/tiktok", async (req) => {
+    await rateLimit("auth", req.ip, 10, 60);
     const { code, role } = (req.body ?? {}) as { code?: string; role?: string };
     if (!code) throw new ApiError(422, "code_required", "TikTok OAuth code required");
     return identity.loginWithTikTok(code, role === "artist" ? "artist" : "clipper");
+  });
+
+  // TikTok's web OAuth requires an https redirect URI. This endpoint is that
+  // URI: it bounces the authorization code into the app's custom scheme so
+  // ASWebAuthenticationSession can catch it.
+  app.get("/v1/auth/tiktok/callback", async (req, reply) => {
+    const { code, state, error } = req.query as { code?: string; state?: string; error?: string };
+    const target = new URL("bountysounds://oauth");
+    if (code) target.searchParams.set("code", code);
+    if (state) target.searchParams.set("state", state);
+    if (error) target.searchParams.set("error", error);
+    return reply.redirect(target.toString(), 302);
+  });
+
+  // App Attest key registration. iOS generates a key with DCAppAttestService,
+  // attests it with Apple, and lodges the key id here; cash-out assertions
+  // must then come from a registered key.
+  // TODO(launch hardening): full CBOR attestation-object validation with
+  // Apple's root cert chain before storing — structure checks only for now.
+  app.post("/v1/me/attest", async (req) => {
+    const me = await auth(req);
+    const { keyId, attestation } = (req.body ?? {}) as { keyId?: string; attestation?: string };
+    if (!keyId || keyId.length < 8 || keyId.length > 128)
+      throw new ApiError(422, "key_required", "keyId required");
+    if (!attestation || attestation.length < 16)
+      throw new ApiError(422, "attestation_required", "attestation object required");
+    await registerAttestKey(me.id, keyId);
+    return { registered: true };
   });
 
   app.post("/v1/me/push-tokens", async (req) => {
@@ -126,6 +176,7 @@ export function buildServer(deps: Deps) {
 
   app.post("/v1/bounties/:id/claims", async (req, reply) => {
     const me = await auth(req);
+    await rateLimit("claim", me.id, 30, 60);
     const { id } = req.params as { id: string };
     await withIdempotency(req, reply, me.id, async () => ({
       status: 201,
@@ -161,10 +212,19 @@ export function buildServer(deps: Deps) {
   app.post("/v1/me/payouts", async (req, reply) => {
     const me = await auth(req);
     // Cash out requires a fresh device-attested assertion (App Attest on iOS,
-    // surfaced to the user as Face ID). Verification is stubbed to presence.
+    // surfaced to the user as Face ID). Header format: "<keyId>:<assertion>".
+    // Once an account has registered a key, assertions must come from it;
+    // accounts with no registered key pass on presence only outside live mode.
     const attestation = req.headers["x-device-attestation"];
     if (typeof attestation !== "string" || attestation.length < 8)
       throw new ApiError(403, "attestation_required", "fresh device attestation required");
+    if (await hasAttestKeys(me.id)) {
+      const keyId = attestation.split(":", 1)[0];
+      if (!keyId || !(await isRegisteredAttestKey(me.id, keyId)))
+        throw new ApiError(403, "attestation_invalid", "assertion is not from a registered key");
+    } else if (process.env.GATEWAYS === "live") {
+      throw new ApiError(403, "attestation_unregistered", "register an App Attest key first");
+    }
     const { amountCents } = (req.body ?? {}) as { amountCents?: number };
     if (!amountCents) throw new ApiError(422, "amount_required", "amountCents required");
     await withIdempotency(req, reply, me.id, async () => ({
@@ -195,6 +255,49 @@ export function buildServer(deps: Deps) {
   app.get("/v1/me/wire", async (req) => {
     const me = await auth(req);
     return { items: await listWire(pool, me.id) };
+  });
+
+  // The roster: paid-out standings over a rolling 90 days. Points are paid
+  // views (in thousands) — "Points are paid views, all bounties, rolling 90
+  // days" per the Roster screen copy.
+  app.get("/v1/roster", async (req) => {
+    const me = await auth(req);
+    const { rows } = await pool.query(
+      `with paid as (
+         select cl.account_id,
+                sum(le.amount_cents)::bigint as paid_cents,
+                count(distinct b.id)::int as bounties
+         from ledger_entry le
+         join submission s on s.id = le.submission_id
+         join claim cl on cl.id = s.claim_id
+         join bounty b on b.id = cl.bounty_id
+         where le.kind = 'payout_clear' and le.direction = 'credit'
+           and le.account_ref like 'payable:%'
+           and le.created_at > now() - interval '90 days'
+         group by cl.account_id
+       ), views as (
+         select cl.account_id,
+                coalesce(sum(vs.delta) filter (
+                  where vs.delta > 0 and not (vs.anomaly_flags && '{private,music_mismatch}')), 0)::bigint as paid_views
+         from view_sample vs
+         join submission s on s.id = vs.submission_id and s.state = 'paid'
+         join claim cl on cl.id = s.claim_id
+         where vs.sampled_at > now() - interval '90 days'
+         group by cl.account_id
+       )
+       select a.id, a.handle,
+              p.paid_cents, p.bounties,
+              coalesce(v.paid_views, 0) as paid_views,
+              (coalesce(v.paid_views, 0) / 1000)::int as points
+       from paid p
+       join account a on a.id = p.account_id
+       left join views v on v.account_id = p.account_id
+       order by p.paid_cents desc, a.handle
+       limit 50`,
+    );
+    return {
+      roster: rows.map((r, i) => ({ rank: i + 1, isYou: r.id === me.id, ...r })),
+    };
   });
 
   // -- artist ----------------------------------------------------------------
@@ -277,10 +380,19 @@ export function buildServer(deps: Deps) {
 
   // -- webhooks --------------------------------------------------------------
 
-  // Signature verification is the Stripe SDK's job in production; the fake
-  // gateway has no signatures, so this trusts a shared secret header.
+  // Stripe webhooks. A `Stripe-Signature` header is verified against the
+  // raw payload (HMAC-SHA256, Stripe's scheme). Outside live mode the fake
+  // gateway has no signatures, so a shared-secret header is accepted as a
+  // dev/test fallback; live mode requires the real signature.
   app.post("/v1/stripe/webhook", async (req) => {
-    if (req.headers["x-webhook-secret"] !== (process.env.STRIPE_WEBHOOK_SECRET ?? "whsec_dev"))
+    const secret = process.env.STRIPE_WEBHOOK_SECRET ?? "whsec_dev";
+    const sigHeader = req.headers["stripe-signature"];
+    const rawBody = (req as { rawBody?: string }).rawBody ?? "";
+    const signed = typeof sigHeader === "string"
+      && verifyStripeSignature(rawBody, sigHeader, secret);
+    const devFallback = process.env.GATEWAYS !== "live"
+      && req.headers["x-webhook-secret"] === secret;
+    if (!signed && !devFallback)
       throw new ApiError(401, "bad_signature", "webhook signature check failed");
     const evt = (req.body ?? {}) as {
       type?: string;
