@@ -1,0 +1,37 @@
+# Local full stack: API + worker + Postgres + Redis.
+#   docker compose up --build
+services:
+  api:
+    build: .
+    ports: ["3000:3000"]
+    environment:
+      DATABASE_URL: postgres://bounty:bounty@db:5432/bounty
+      REDIS_URL: redis://redis:6379
+      GATEWAYS: ${GATEWAYS:-fake}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_dev}
+      TIKTOK_CLIENT_KEY: ${TIKTOK_CLIENT_KEY:-}
+      TIKTOK_CLIENT_SECRET: ${TIKTOK_CLIENT_SECRET:-}
+      TIKTOK_REDIRECT_URI: ${TIKTOK_REDIRECT_URI:-}
+    depends_on: [db, redis]
+  worker:
+    build: .
+    command: ["node", "dist/src/bin/worker.js"]
+    environment:
+      DATABASE_URL: postgres://bounty:bounty@db:5432/bounty
+      REDIS_URL: redis://redis:6379
+      GATEWAYS: ${GATEWAYS:-fake}
+      TIKTOK_CLIENT_KEY: ${TIKTOK_CLIENT_KEY:-}
+      TIKTOK_CLIENT_SECRET: ${TIKTOK_CLIENT_SECRET:-}
+    depends_on: [db, redis]
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: bounty
+      POSTGRES_PASSWORD: bounty
+      POSTGRES_DB: bounty
+    volumes: [pgdata:/var/lib/postgresql/data]
+  redis:
+    image: redis:7-alpine
+volumes:
+  pgdata:

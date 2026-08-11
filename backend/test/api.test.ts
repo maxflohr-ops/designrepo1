@@ -130,6 +130,12 @@ describe("REST API (§6)", () => {
     // the wire carried the story
     const wire = await app.inject({ method: "GET", url: "/v1/me/wire", headers: clipper.h });
     expect(wire.json().items.map((i: { body: string }) => i.body).join(" ")).toContain("cleared");
+
+    // the desk endpoint shows the settled claim with its submission
+    const claims = await app.inject({ method: "GET", url: "/v1/me/claims", headers: clipper.h });
+    expect(claims.json().claims[0]).toMatchObject({
+      state: "settled", submission_state: "paid", accrued_cents: 8800,
+    });
   });
 
   it("replays idempotent claims instead of double-claiming", async () => {

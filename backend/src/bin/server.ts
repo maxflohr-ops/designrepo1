@@ -1,12 +1,9 @@
 import { buildServer } from "../api/server.js";
 import { migrate } from "../db.js";
 import { config } from "../config.js";
-import { FakeStripe } from "../gateways/stripe.js";
-import { StubTikTok } from "../gateways/tiktok.js";
+import { makeGateways } from "../gateways/index.js";
 
-// Dev entrypoint: fake Stripe, stub TikTok. Swap both for real gateways at
-// ship time — nothing above the gateway interfaces changes.
 await migrate();
-const app = buildServer({ stripe: new FakeStripe(), tiktok: new StubTikTok() });
+const app = buildServer(makeGateways());
 await app.listen({ port: config.port, host: "0.0.0.0" });
-console.log(`bounty sounds backend on :${config.port}`);
+console.log(`bounty sounds backend on :${config.port} (gateways: ${process.env.GATEWAYS ?? "fake"})`);

@@ -173,6 +173,25 @@ export function buildServer(deps: Deps) {
     }));
   });
 
+  // Clipper's desk: open claim (with checklist) + everything under review.
+  app.get("/v1/me/claims", async (req) => {
+    const me = await auth(req);
+    const { rows } = await pool.query(
+      `select cl.id, cl.state, cl.checklist, cl.claimed_at, cl.expires_at,
+              b.id as bounty_id, b.serial, b.title, b.rate_cents, b.rate_unit, b.payout_model,
+              s.id as submission_id, s.state as submission_state, s.accrued_cents, s.posted_at,
+              d.id as dispute_id, d.state as dispute_state, d.reason_code
+       from claim cl
+       join bounty b on b.id = cl.bounty_id
+       left join submission s on s.claim_id = cl.id
+       left join dispute d on d.submission_id = s.id and d.state <> 'resolved'
+       where cl.account_id = $1
+       order by cl.claimed_at desc limit 50`,
+      [me.id],
+    );
+    return { claims: rows };
+  });
+
   app.get("/v1/me/wire", async (req) => {
     const me = await auth(req);
     return { items: await listWire(pool, me.id) };
