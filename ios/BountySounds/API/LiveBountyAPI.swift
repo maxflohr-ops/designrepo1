@@ -217,20 +217,21 @@ struct LiveBountyAPI: BountyAPI {
     }
 
     func cashOut() async throws {
-        // TODO(launch): replace the placeholder with a fresh App Attest
-        // assertion gated by LocalAuthentication (Face ID) — backend rejects
-        // payouts without X-Device-Attestation.
+        let purse = try json(try await request("GET", "v1/me/purse"))
+        let amount = purse["payableCents"] as? Int ?? 0
+        guard amount > 0 else { throw APIError.http(422, Data()) }
+        let attestation = await DeviceTrust.attestationHeader(baseURL: baseURL, token: token)
         var req = URLRequest(url: baseURL.appendingPathComponent("v1/me/payouts"))
         req.httpMethod = "POST"
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue(UUID().uuidString, forHTTPHeaderField: "Idempotency-Key")
-        req.setValue("appattest-placeholder", forHTTPHeaderField: "X-Device-Attestation")
+        req.setValue(attestation, forHTTPHeaderField: "X-Device-Attestation")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let purse = try json(try await request("GET", "v1/me/purse"))
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "amountCents": purse["payableCents"] as? Int ?? 0,
-        ])
-        _ = try await URLSession.shared.data(for: req)
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["amountCents": amount])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.http((response as? HTTPURLResponse)?.statusCode ?? 0, data)
+        }
     }
 
     // MARK: wire / roster / settings
@@ -300,10 +301,15 @@ struct LiveBountyAPI: BountyAPI {
                               idempotent: true)
     }
 
-    func postBounty(purseCents: Int, model: PayoutModel) async throws -> String? {
+    func postBounty(purseCents: Int, model: PayoutModel, soundURL: String) async throws -> String? {
+        let resolved = try json(try await request("POST", "v1/sounds/resolve", body: ["url": soundURL]))
+        guard let sound = resolved["sound"] as? [String: Any], let soundId = sound["id"] as? String else {
+            throw APIError.http(422, Data())
+        }
+        let title = (sound["title"] as? String).flatMap { $0 == "Untitled sound" ? nil : "Clip \u{201C}\($0)\u{201D}" }
         let body = try json(try await request("POST", "v1/bounties", body: [
-            "soundId": "", // sound picker lands with the TikTok sound-link flow
-            "title": "Clip the Thursday stream",
+            "soundId": soundId,
+            "title": title ?? "New sound bounty",
             "payoutModel": model == .perClip ? "per_clip" : "per_view",
             "rateCents": model == .perClip ? 2000 : 500,
             "rateUnit": 5000,

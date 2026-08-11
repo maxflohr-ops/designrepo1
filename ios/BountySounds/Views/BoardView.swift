@@ -24,21 +24,47 @@ struct BoardView: View {
                     .padding(.bottom, 8)
             }
 
-            GeometryReader { geo in
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(state.bounties.enumerated()), id: \.element.id) { index, bounty in
-                            ContractCard(bounty: bounty) { state.openBounty(index) }
-                                .padding(.bottom, 10)
-                                .frame(height: geo.size.height)
+            if state.bounties.isEmpty {
+                emptyBoard
+            } else {
+                GeometryReader { geo in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(state.bounties.enumerated()), id: \.element.id) { index, bounty in
+                                ContractCard(bounty: bounty) { state.openBounty(index) }
+                                    .padding(.bottom, 10)
+                                    .frame(height: geo.size.height)
+                            }
                         }
+                        .scrollTargetLayout()
                     }
-                    .scrollTargetLayout()
+                    .scrollTargetBehavior(.paging)
                 }
-                .scrollTargetBehavior(.paging)
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 16)
         }
+    }
+
+    private var emptyBoard: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            MonoLabel(text: "— Bounty Board —", size: 10, tracking: 0.22)
+            Text("The board is quiet.")
+                .font(.fredericka(30))
+                .foregroundStyle(Color.ink)
+                .padding(.top, 14)
+            Text("New purses hit the wire the moment they're funded. Turn on push and you'll hear first.")
+                .font(.grotesk(14.5))
+                .foregroundStyle(Color.bodyText)
+                .multilineTextAlignment(.center)
+                .lineSpacing(4)
+                .frame(maxWidth: 260)
+                .padding(.top, 12)
+            Spacer()
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 24)
     }
 
     private var shareBanner: some View {
@@ -77,6 +103,7 @@ struct ContractCard: View {
                 .opacity(0.06)
                 .offset(x: 130, y: 130)
                 .allowsHitTesting(false)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack {

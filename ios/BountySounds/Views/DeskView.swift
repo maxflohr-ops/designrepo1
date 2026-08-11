@@ -55,6 +55,7 @@ struct DeskView: View {
                         .scaledToFit()
                         .frame(width: 104)
                         .opacity(0.55)
+                        .accessibilityHidden(true)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 26)
                         .padding(.bottom, 20)

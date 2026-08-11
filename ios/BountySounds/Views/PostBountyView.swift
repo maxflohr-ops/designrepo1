@@ -86,23 +86,36 @@ struct PostBountyView: View {
     }
 
     private var soundCard: some View {
-        HStack(spacing: 12) {
-            Text("ART")
-                .font(.mono(9))
-                .foregroundStyle(Color.paper)
-                .frame(width: 46, height: 46)
-                .background(Color.ink)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Northsider — Ridge Club")
-                    .font(.grotesk(15, .semibold))
-                    .foregroundStyle(Color.ink)
-                Text("linked from TikTok sound page")
-                    .font(.grotesk(12.5))
-                    .foregroundStyle(Color.muted)
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Text("ART")
+                    .font(.mono(9))
+                    .foregroundStyle(Color.paper)
+                    .frame(width: 46, height: 46)
+                    .background(Color.ink)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(state.soundLink.isEmpty ? "Northsider — Ridge Club" : "Sound linked")
+                        .font(.grotesk(15, .semibold))
+                        .foregroundStyle(Color.ink)
+                    Text(state.soundLink.isEmpty ? "linked from TikTok sound page" : "resolved when the purse is funded")
+                        .font(.grotesk(12.5))
+                        .foregroundStyle(Color.muted)
+                }
+                Spacer()
             }
-            Spacer()
+            .padding(12)
+            TextField("or paste the TikTok sound link", text: $state.soundLink)
+                .font(.mono(12.5))
+                .foregroundStyle(Color.ink)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.URL)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 11)
+                .overlay(alignment: .top) { Hairline() }
+                .accessibilityLabel("TikTok sound link")
         }
-        .padding(12)
         .background(Color.paper)
         .overlay(Rectangle().strokeBorder(Color.strongBorder, lineWidth: 1))
     }

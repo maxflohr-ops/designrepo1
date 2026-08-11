@@ -22,12 +22,18 @@ struct ClaimsView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
-                    claimedCard
-                    MonoLabel(text: "Under review", size: 9.5, tracking: 0.2)
-                        .padding(.top, 20)
-                    ForEach(state.reviewing) { claim in
-                        reviewRow(claim)
-                            .padding(.top, 10)
+                    if state.current != nil {
+                        claimedCard
+                    } else {
+                        emptyDesk
+                    }
+                    if !state.reviewing.isEmpty {
+                        MonoLabel(text: "Under review", size: 9.5, tracking: 0.2)
+                            .padding(.top, 20)
+                        ForEach(state.reviewing) { claim in
+                            reviewRow(claim)
+                                .padding(.top, 10)
+                        }
                     }
                 }
                 .padding(.horizontal, 16)
@@ -35,6 +41,31 @@ struct ClaimsView: View {
                 .padding(.bottom, 24)
             }
         }
+    }
+
+    private var emptyDesk: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            MonoLabel(text: "Nothing in hand", size: 9, tracking: 0.2, color: .crimson, bold: true)
+                .padding(.bottom, 8)
+            Hairline()
+            Text("Your desk is clear.")
+                .font(.fredericka(22))
+                .foregroundStyle(Color.ink)
+                .padding(.top, 12)
+            Text("Seize a contract off the board and the checklist lands here with a six-day window.")
+                .font(.grotesk(13.5))
+                .foregroundStyle(Color.muted)
+                .lineSpacing(3)
+                .padding(.top, 8)
+            StampButton(title: "Walk the board", minHeight: 48) {
+                state.screen = .board
+            }
+            .padding(.top, 16)
+        }
+        .padding(.vertical, 18)
+        .padding(.horizontal, 16)
+        .background(Color.card)
+        .overlay(Rectangle().strokeBorder(Color.hairline, lineWidth: 1))
     }
 
     private var claimedCard: some View {
@@ -118,6 +149,8 @@ struct ClaimsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(step.title), \(done ? "done" : "not done")")
+        .accessibilityHint(step.subtitle)
     }
 
     private func reviewRow(_ claim: ReviewingClaim) -> some View {

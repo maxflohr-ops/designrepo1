@@ -18,5 +18,13 @@ export async function listWire(db: Queryable, accountId: string, limit = 50) {
   return rows;
 }
 
-// APNs stub — replace with a real provider (token-based APNs) at ship time.
-async function sendPush(_accountId: string, _body: string) {}
+// Fan the wire item out to the account's registered devices. Silent no-op
+// until APNS_KEY_P8/APNS_KEY_ID/APNS_TEAM_ID are configured.
+async function sendPush(accountId: string, body: string) {
+  const { apnsConfigured, sendApnsAlert } = await import("./apns.js");
+  if (!apnsConfigured()) return;
+  const { pool } = await import("../../db.js");
+  const { rows } = await pool.query(
+    "select token from device_push_token where account_id = $1", [accountId]);
+  await Promise.allSettled(rows.map((r) => sendApnsAlert(r.token, body)));
+}

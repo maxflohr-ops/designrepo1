@@ -22,6 +22,14 @@ struct WireView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
+                    if state.wire.isEmpty {
+                        Text("Quiet on the wire. The first purse on a sound you clip will land here.")
+                            .font(.grotesk(14))
+                            .foregroundStyle(Color.muted)
+                            .lineSpacing(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(20)
+                    }
                     ForEach(state.wire) { item in
                         VStack(spacing: 0) {
                             HStack(alignment: .top, spacing: 12) {

@@ -31,6 +31,7 @@ protocol BountyAPI: Sendable {
     func submitVerdict(submissionId: String, verdict: Verdict) async throws
     // Both return a Stripe PaymentIntent client secret to confirm in
     // PaymentSheet, or nil when no payment step is needed (mock mode).
-    func postBounty(purseCents: Int, model: PayoutModel) async throws -> String?
+    // soundURL is a pasted TikTok sound link, resolved server-side.
+    func postBounty(purseCents: Int, model: PayoutModel, soundURL: String) async throws -> String?
     func topUpPurse(bountyId: String, amountCents: Int) async throws -> String?
 }

@@ -320,6 +320,25 @@ export function buildServer(deps: Deps) {
 
   // -- artist ----------------------------------------------------------------
 
+  // Resolve a pasted TikTok sound link to a sound row (find-or-create by
+  // music id). Title/verification enrich later via the TikTok client once
+  // Display API scopes are live.
+  app.post("/v1/sounds/resolve", async (req) => {
+    const me = await auth(req);
+    const { url } = (req.body ?? {}) as { url?: string };
+    const musicId = url?.match(/(\d{6,19})/)?.[1];
+    if (!musicId) throw new ApiError(422, "bad_sound_url", "paste a TikTok sound link");
+    const titleGuess = url?.match(/music\/([A-Za-z0-9-]+)-\d/)?.[1]?.replace(/-/g, " ");
+    const { rows: [sound] } = await pool.query(
+      `insert into sound (tiktok_music_id, title, artist_account_id)
+       values ($1, $2, $3)
+       on conflict (tiktok_music_id) do update set tiktok_music_id = excluded.tiktok_music_id
+       returning *`,
+      [musicId, titleGuess ?? "Untitled sound", me.id],
+    );
+    return { sound };
+  });
+
   app.post("/v1/bounties", async (req, reply) => {
     const me = await auth(req);
     if (me.suspended_at)

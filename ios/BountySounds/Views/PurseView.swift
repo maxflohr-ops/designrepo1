@@ -22,7 +22,7 @@ struct PurseView: View {
                 .padding(.top, 12)
 
                 StampButton(title: "Cash out · Face ID", minHeight: 48) {
-                    state.flash("Cash out sent. Face ID confirmed.")
+                    state.cashOut()
                 }
                 .padding(.top, 16)
             }
@@ -35,6 +35,14 @@ struct PurseView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     MonoLabel(text: "Ledger", size: 9.5, tracking: 0.2)
                         .padding(.horizontal, 4)
+                    if state.ledger.isEmpty {
+                        Text("Nothing on the ledger yet — money lands here the moment a clip clears.")
+                            .font(.grotesk(13.5))
+                            .foregroundStyle(Color.muted)
+                            .lineSpacing(3)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 14)
+                    }
                     ForEach(state.ledger) { row in
                         VStack(spacing: 0) {
                             HStack(spacing: 12) {

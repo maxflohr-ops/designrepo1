@@ -11,6 +11,7 @@ struct OnboardingView: View {
                 .scaledToFit()
                 .frame(width: 72, height: 72)
                 .padding(.top, 48)
+                .accessibilityHidden(true)
 
             // triple border: hairline → strong → 2px ink
             plaque
@@ -50,6 +51,7 @@ struct OnboardingView: View {
                 .frame(width: 300)
                 .opacity(0.05)
                 .allowsHitTesting(false)
+                .accessibilityHidden(true)
 
             VStack(spacing: 0) {
                 MonoLabel(text: "— Bounty Board —", size: 10, tracking: 0.22)

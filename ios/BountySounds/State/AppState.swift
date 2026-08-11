@@ -24,6 +24,7 @@ final class AppState: ObservableObject {
     @Published var verdicts: [String: Verdict] = [:]
     @Published var purseSelection = 500          // dollars, post-flow presets
     @Published var payoutModel: PayoutModel = .perViews
+    @Published var soundLink = ""                // pasted TikTok sound URL (artist post flow)
     @Published var toast: String?
     @Published var showShareBanner = true        // deep-linked from the TikTok share sheet
 
@@ -159,9 +160,62 @@ final class AppState: ObservableObject {
 
     func seize() {
         guard let bounty = current else { return }
-        checklistDone = [true, false, false, false]
-        Task { try? await api.claimBounty(id: bounty.id) }
-        flash("Claim held for 6 days. Checklist is on your desk.", goTo: .claims)
+        Task {
+            do {
+                try await api.claimBounty(id: bounty.id)
+                checklistDone = [true, false, false, false]
+                flash("Claim held for 6 days. Checklist is on your desk.", goTo: .claims)
+            } catch LiveBountyAPI.APIError.http(let status, let data) {
+                flash(Self.claimErrorMessage(status: status, data: data))
+            } catch {
+                flash("You're offline — the claim didn't take. Try again.")
+            }
+        }
+    }
+
+    static func claimErrorMessage(status: Int, data: Data) -> String {
+        let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
+            .flatMap { $0?["error"] as? String }
+        switch code {
+        case "slots_full": return "Slots are full — that contract is spoken for."
+        case "already_claimed": return "You already hold a claim on this contract."
+        case "past_deadline": return "That contract's deadline has passed."
+        case "account_floor": return "Your TikTok account is too new to claim yet."
+        case "rate_limited": return "Easy — too many claims at once. Try again in a minute."
+        default: return status == 409 ? "That contract just closed." : "Couldn't seize it. Try again."
+        }
+    }
+
+    func cashOut() {
+        Task {
+            guard AppConfig.isLive else {
+                flash("Cash out sent. Face ID confirmed.")
+                return
+            }
+            guard await DeviceTrust.confirmOwner(reason: "Confirm cash-out before money leaves your purse.") else {
+                flash("Face ID didn't confirm. Nothing moved.")
+                return
+            }
+            do {
+                try await api.cashOut()
+                flash("Cash out sent — money's on the way.")
+                purseAmounts = (try? await api.fetchPurse()) ?? purseAmounts
+                ledger = (try? await api.fetchLedger()) ?? ledger
+            } catch LiveBountyAPI.APIError.http(let status, let data) {
+                let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
+                    .flatMap { $0?["error"] as? String }
+                switch code {
+                case "first_payout_hold":
+                    flash("First payouts clear 7 days after settlement — yours is almost ripe.")
+                case "attestation_invalid", "attestation_unregistered":
+                    flash("This device couldn't be verified. Reinstall from TestFlight and retry.")
+                default:
+                    flash(status == 422 ? "Nothing payable yet — views are still counting." : "Cash out didn't go through. Try again.")
+                }
+            } catch {
+                flash("Cash out didn't go through. Try again.")
+            }
+        }
     }
 
     func toggleStep(_ index: Int) {
@@ -186,10 +240,14 @@ final class AppState: ObservableObject {
     // -- artist mode ----------------------------------------------------------
 
     func fundPurse() {
+        if AppConfig.isLive && soundLink.isEmpty {
+            flash("Paste the TikTok sound link first — the contract needs its audio.")
+            return
+        }
         Task {
             do {
                 let clientSecret = try await api.postBounty(
-                    purseCents: purseSelection * 100, model: payoutModel)
+                    purseCents: purseSelection * 100, model: payoutModel, soundURL: soundLink)
                 if let clientSecret {
                     // live mode: collect payment in PaymentSheet; the bounty
                     // goes live when the webhook lands

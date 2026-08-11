@@ -190,6 +190,29 @@ describe("production wiring", () => {
     expect(last).toBe(429);
   });
 
+  it("resolves a pasted sound link to a find-or-create sound row", async () => {
+    const artist = await login("sound_artist", "artist");
+    const res = await app.inject({
+      method: "POST", url: "/v1/sounds/resolve", headers: artist.h,
+      payload: { url: "https://www.tiktok.com/music/Ridge-Club-7301234567890123456" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().sound).toMatchObject({
+      tiktok_music_id: "7301234567890123456", title: "Ridge Club",
+    });
+    const again = await app.inject({
+      method: "POST", url: "/v1/sounds/resolve", headers: artist.h,
+      payload: { url: "https://www.tiktok.com/music/Ridge-Club-7301234567890123456" },
+    });
+    expect(again.json().sound.id).toBe(res.json().sound.id);
+
+    const bad = await app.inject({
+      method: "POST", url: "/v1/sounds/resolve", headers: artist.h,
+      payload: { url: "not a link" },
+    });
+    expect(bad.statusCode).toBe(422);
+  });
+
   it("bounces the TikTok OAuth callback into the app scheme", async () => {
     const res = await app.inject({
       method: "GET", url: "/v1/auth/tiktok/callback?code=abc123&state=xyz",
