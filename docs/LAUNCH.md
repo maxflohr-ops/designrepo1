@@ -35,19 +35,21 @@ done in-session.
 
 - 🔨 Stripe live gateway → verify with test-mode keys end to end
   (PaymentIntent → webhook → live bounty → transfer → refund)
-- ⬜ Stripe webhook **signature verification** (replace the shared-secret
-  header check in `api/server.ts` with real `Stripe-Signature` verification)
+- ✅ Stripe webhook **signature verification** — `Stripe-Signature` HMAC over
+  the raw body; shared-secret fallback only outside live mode
 - ⬜ Stripe **PaymentSheet** in the iOS post-bounty flow (client secret is
   already returned by `POST /v1/bounties`)
 - ⬜ Stripe **Express onboarding** link flow for clippers (payout method
   screen → account link URL → store `payout_method_id`)
-- 🔨 TikTok live client → verify OAuth + `video.query` against the approved
-  app; persist access/refresh tokens in the identity module; confirm what the
-  granted scopes actually return for `music_id` (fallback: oEmbed check)
-- ⬜ TikTok Login Kit in the iOS onboarding (ASWebAuthenticationSession →
-  `POST /v1/auth/tiktok`)
-- ⬜ App Attest for cash-out (`DCAppAttestService` assertion → backend
-  verification, replacing the placeholder header)
+- 🔨 TikTok live client: token persistence + auto-refresh in the identity
+  module done; still to verify OAuth + `video.query` against the approved app
+  and confirm `music_id` scope coverage (fallback: oEmbed check)
+- ✅ TikTok Login Kit in the iOS onboarding (ASWebAuthenticationSession →
+  backend https callback → app scheme → `POST /v1/auth/tiktok`); live mode
+  only — the offline design demo is untouched
+- 🔨 App Attest for cash-out: key registration (`POST /v1/me/attest`) and
+  payout gating on registered keys done; iOS `DCAppAttestService` call + full
+  CBOR attestation validation remain
 - ⬜ Push: APNs key from the developer account → token-based APNs sender in
   `notify` (stub is in place), registration already wired (`/v1/me/push-tokens`)
 
@@ -59,14 +61,17 @@ done in-session.
 - ⬜ Secrets management (Stripe keys, TikTok keys, webhook secrets)
 - ⬜ Backups on Postgres (the ledger is the money — PITR on)
 - ⬜ Error tracking + uptime (Sentry free tier + healthcheck endpoint)
-- ⬜ Rate limiting on auth + claim endpoints (Redis is already in the stack)
+- ✅ Rate limiting on auth (per IP) and claims (per account) via Redis
 
 ## Phase 4 — App hardening (code, ~1 week, overlaps Phase 2)
 
 - ⬜ First real device build; fix whatever the simulator hid
-- ⬜ Wire `LiveBountyAPI` in behind a build-config flag (Debug=mock, Release=live)
-- ⬜ Session persistence (Keychain), logout, token refresh
-- ⬜ Roster endpoint (`GET /v1/roster`) — app currently uses fixture data
+- ✅ Mock/live switch: `BSAPIBaseURL` in Info.plist (empty = offline design
+  demo on `MockBountyAPI`; set = `LiveBountyAPI` against the backend)
+- ✅ Session persistence (Keychain), sign-out on the Desk, session restore at
+  launch (token refresh: sessions last 30 days, re-login after)
+- ✅ Roster endpoint (`GET /v1/roster`, 90-day payout standings) wired into
+  `LiveBountyAPI.fetchRoster`
 - ⬜ Sound picker for the artist post flow (link from TikTok sound page / paste URL)
 - ⬜ Empty states (no claims, empty board, zero purse) — prototype never shows them
 - ⬜ Error surfaces (claim 409 slots-full, submission check failures, offline)
