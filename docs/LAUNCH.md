@@ -47,11 +47,11 @@ done in-session.
 - ✅ TikTok Login Kit in the iOS onboarding (ASWebAuthenticationSession →
   backend https callback → app scheme → `POST /v1/auth/tiktok`); live mode
   only — the offline design demo is untouched
-- 🔨 App Attest for cash-out: key registration (`POST /v1/me/attest`) and
-  payout gating on registered keys done; iOS `DCAppAttestService` call + full
-  CBOR attestation validation remain
-- ⬜ Push: APNs key from the developer account → token-based APNs sender in
-  `notify` (stub is in place), registration already wired (`/v1/me/push-tokens`)
+- ✅ App Attest for cash-out: key registration + payout gating server-side,
+  `DCAppAttestService` key generation/assertions + Face ID gate in the app
+  (full CBOR attestation validation server-side remains a hardening TODO)
+- 🔨 Push: token-based APNs sender implemented (ES256 JWT over HTTP/2, silent
+  until APNS_* env is set); needs the APNs key from the developer account
 
 ## Phase 3 — Backend to production (code + you, 2–3 days)
 
@@ -72,12 +72,12 @@ done in-session.
   launch (token refresh: sessions last 30 days, re-login after)
 - ✅ Roster endpoint (`GET /v1/roster`, 90-day payout standings) wired into
   `LiveBountyAPI.fetchRoster`
-- ⬜ Sound picker for the artist post flow (link from TikTok sound page / paste URL)
-- ⬜ Empty states (no claims, empty board, zero purse) — prototype never shows them
-- ⬜ Error surfaces (claim 409 slots-full, submission check failures, offline)
-- ⬜ App icon (1024×1024 — great-seal on paper, square) into `AppIcon.appiconset`
-- ⬜ Accessibility pass: Dynamic Type on body text, VoiceOver labels on the
-  icon-free tab bar and checklist
+- ✅ Sound picker: paste-a-link field in the post flow + `POST /v1/sounds/resolve`
+- ✅ Empty states for board, claims desk, ledger, and wire
+- ✅ Error surfaces: claim 409/403 toasts by error code, cash-out failures, offline
+- ✅ App icon: 1024×1024 great-seal on paper in `AppIcon.appiconset`
+- ✅ Accessibility: decorative art hidden from VoiceOver, checklist rows
+  labeled with state (tab bar is text-only and reads natively)
 
 ## Phase 5 — Legal & App Review prep (you + drafts provided, ~2–3 days)
 
@@ -86,7 +86,7 @@ done in-session.
 - ⬜ Privacy policy hosted at bountysounds.com/privacy (draft provided)
 - ⬜ App Store privacy "nutrition label" answers (data collected: handle,
   email, payout info via Stripe, video metadata)
-- ⬜ App Review notes + demo account with seeded fixture data (metadata draft:
+- 🔨 App Review notes + demo seed (`npm run seed:demo`) ready (metadata draft:
   `docs/appstore/metadata.md`). Key points for review: payouts are for
   real-world creative work (not digital content → external payments are
   allowed, no IAP required); TikTok login is an established third-party OAuth.
