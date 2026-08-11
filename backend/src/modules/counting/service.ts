@@ -6,6 +6,7 @@ import { releaseReserve } from "../../domain/ledger.js";
 import type { TikTokClient } from "../../gateways/tiktok.js";
 import type { BountyService } from "../bounties/service.js";
 import { pushWire } from "../notify/service.js";
+import { emitOpsEvent } from "../notify/ops.js";
 
 // §5 — the decaying cadence, in minutes: hourly for the first 48 hours, every
 // six hours to day 7, daily to day 14.
@@ -65,6 +66,16 @@ export class CountingService {
   // Poll one submission: write the append-only sample, apply the §5 rules,
   // accrue inside the same transaction as the reserve write (§4 invariant).
   async pollSubmission(submissionId: string, now = new Date()) {
+    const out = await this.pollSubmissionTxn(submissionId, now);
+    if ("flags" in out && out.flags?.includes("spike")) {
+      emitOpsEvent("spike_hold", {
+        submissionId, delta: out.delta, reservedCents: out.reserved,
+      });
+    }
+    return out;
+  }
+
+  private async pollSubmissionTxn(submissionId: string, now: Date) {
     return withTxn(async (c) => {
       const { rows: [sub] } = await c.query(
         `select s.*, cl.account_id as clipper_id, cl.id as claim_id,

@@ -8,6 +8,7 @@ import {
 import type { StripeGateway } from "../../gateways/stripe.js";
 import type { TikTokClient } from "../../gateways/tiktok.js";
 import { pushWire } from "../notify/service.js";
+import { emitOpsEvent } from "../notify/ops.js";
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string) {
@@ -259,7 +260,19 @@ export class BountyService {
         [submissionId, artistId, reason ?? "artist_dispute"]);
       await pushWire(c, sub.clipper_id,
         `Held for review on “${sub.bounty_title}” — you have ${config.appealSlaHours} hours to appeal.`, "warn");
-      return { state: "held", disputeId: d.id };
+      return {
+        state: "held" as const, disputeId: d.id, submissionId,
+        bountyTitle: sub.bounty_title, heldCents: Number(sub.accrued_cents), reason: reason ?? "artist_dispute",
+      };
+    }).then((out) => {
+      if ("disputeId" in out) {
+        emitOpsEvent("dispute_opened", {
+          disputeId: out.disputeId, submissionId: out.submissionId,
+          bountyTitle: out.bountyTitle, heldCents: out.heldCents, reason: out.reason,
+          slaHours: config.appealSlaHours,
+        });
+      }
+      return out;
     });
   }
 
@@ -294,6 +307,10 @@ export class BountyService {
         return { state: "resolved", resolution: "clipper", autoResolved: true };
       }
       return { state: "appealed", slaHours: config.appealSlaHours };
+    }).then((out) => {
+      if (out.state === "appealed")
+        emitOpsEvent("appeal_lodged", { disputeId, statement, slaHours: config.appealSlaHours });
+      return out;
     });
   }
 

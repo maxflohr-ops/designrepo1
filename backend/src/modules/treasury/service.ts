@@ -5,6 +5,7 @@ import { balance, cashOut, recordChargeback, refs, refundArtist } from "../../do
 import type { StripeGateway } from "../../gateways/stripe.js";
 import { ApiError } from "../bounties/service.js";
 import { pushWire } from "../notify/service.js";
+import { emitOpsEvent } from "../notify/ops.js";
 
 export class TreasuryService {
   constructor(private stripe: StripeGateway) {}
@@ -126,7 +127,10 @@ export class TreasuryService {
       await pushWire(c, b.artist_account_id,
         `Payment reversed on “${b.title}”. $${(debtCents / 100).toLocaleString()} is owed; posting is paused until it clears.`,
         "warn");
-      return { debtCents, bountyId: b.id };
+      return { debtCents, bountyId: b.id, bountyTitle: b.title as string };
+    }).then((out) => {
+      emitOpsEvent("chargeback", out);
+      return out;
     });
   }
 }
