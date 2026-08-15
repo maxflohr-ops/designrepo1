@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Xcode 15 renamed this value from "app-store" to "app-store-connect".
+	     Xcode 16 accepts the new spelling; if you ever build with an older
+	     toolchain, change it back. -->
+	<key>method</key>
+	<string>app-store-connect</string>
+
+	<!-- Exporting only. The workflow uploads separately via Apple's own
+	     upload-testflight-build action, so it can report failures properly. -->
+	<key>destination</key>
+	<string>export</string>
+
+	<!-- Filled in at export time from the APPLE_TEAM_ID repo variable, so the
+	     team id never has to be committed. -->
+	<key>teamID</key>
+	<string>$(APPLE_TEAM_ID)</string>
+
+	<key>signingStyle</key>
+	<string>automatic</string>
+
+	<!-- Let Apple thin and re-sign per device. -->
+	<key>stripSwiftSymbols</key>
+	<true/>
+	<key>uploadSymbols</key>
+	<true/>
+
+	<!-- Never generate a manifest; this is not an enterprise/ad-hoc build. -->
+	<key>compileBitcode</key>
+	<false/>
+</dict>
+</plist>
