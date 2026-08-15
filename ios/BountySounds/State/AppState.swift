@@ -5,6 +5,29 @@ enum Screen: Equatable {
     case onboard, board, detail, claims, dispute, submit, purse, alerts, me, roster, post, review
 }
 
+#if DEBUG
+extension Screen {
+    // String → case, for the CI screenshot harness only.
+    init?(harnessName: String) {
+        switch harnessName {
+        case "onboard": self = .onboard
+        case "board": self = .board
+        case "detail": self = .detail
+        case "claims": self = .claims
+        case "dispute": self = .dispute
+        case "submit": self = .submit
+        case "purse": self = .purse
+        case "alerts": self = .alerts
+        case "me": self = .me
+        case "roster": self = .roster
+        case "post": self = .post
+        case "review": self = .review
+        default: return nil
+        }
+    }
+}
+#endif
+
 enum Mode { case clipper, artist }
 
 // Mirrors the prototype's logic class: screen enum, mode, current bounty
@@ -58,8 +81,28 @@ final class AppState: ObservableObject {
         } else {
             self.api = MockBountyAPI()
         }
+        #if DEBUG
+        applyHarnessOverrides()
+        #endif
         Task { await load() }
     }
+
+    #if DEBUG
+    // CI screenshot harness. `BS_MODE` / `BS_SCREEN` (passed by simctl as
+    // SIMCTL_CHILD_*) drop the app straight onto one screen so every screen can
+    // be captured without UI automation. DEBUG-only, so it is never compiled
+    // into a TestFlight or App Store build, and absent both variables it does
+    // nothing at all — the normal launch path is untouched.
+    private func applyHarnessOverrides() {
+        let env = ProcessInfo.processInfo.environment
+        if let raw = env["BS_MODE"] {
+            mode = raw == "artist" ? .artist : .clipper
+        }
+        if let raw = env["BS_SCREEN"], let target = Screen(harnessName: raw) {
+            screen = target
+        }
+    }
+    #endif
 
     func load() async {
         do {
