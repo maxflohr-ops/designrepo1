@@ -72,3 +72,115 @@ jobs:
           grep -E "^/.*: error:" /tmp/xcodebuild.log | sort -u || echo "(none)"
           echo "--- warnings ---"
           grep -E "^/.*: warning:" /tmp/xcodebuild.log | sort -u | head -40 || echo "(none)"
+
+  ios-screenshots:
+    # Proves the app actually RUNS, not just compiles. Boots a simulator,
+    # installs the build, and launches it once per screen per mode using the
+    # DEBUG-only BS_SCREEN/BS_MODE harness in AppState. A crash or a failed
+    # launch fails this job — that is the point of it.
+    needs: ios-build
+    runs-on: macos-15
+    permissions:
+      contents: write
+    env:
+      BUNDLE_ID: com.bountysounds.ios
+      DEVICE: iPhone 16 Pro Max
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s /Applications/Xcode_16.2.app || ls /Applications | grep Xcode
+
+      - name: Build for a concrete simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project ios/BountySounds.xcodeproj \
+            -scheme BountySounds \
+            -destination "platform=iOS Simulator,name=${DEVICE}" \
+            -derivedDataPath /tmp/dd \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tail -5
+
+      - name: Boot simulator and walk every screen
+        run: |
+          set -uo pipefail
+          APP=/tmp/dd/Build/Products/Debug-iphonesimulator/BountySounds.app
+          test -d "$APP" || { echo "no .app at $APP"; ls -R /tmp/dd/Build/Products || true; exit 1; }
+
+          RUNTIME=$(xcrun simctl list runtimes -j | python3 -c "import json,sys;rs=[r for r in json.load(sys.stdin)['runtimes'] if r.get('isAvailable') and 'iOS' in r['name']];print(sorted(rs,key=lambda r:[int(x) for x in r['version'].split('.')])[-1]['identifier'])")
+          echo "runtime: $RUNTIME"
+          UDID=$(xcrun simctl create bs-shots "$DEVICE" "$RUNTIME") || {
+            echo "could not create '$DEVICE'; available device types:"; xcrun simctl list devicetypes | grep iPhone; exit 1; }
+          echo "udid: $UDID"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" "$APP"
+          # Deterministic status bar so screenshots are reproducible.
+          xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3 || true
+
+          mkdir -p shots
+          FAILED=""
+          for MODE in clipper artist; do
+            for SCREEN in onboard board detail claims dispute submit purse alerts me roster post review; do
+              xcrun simctl terminate "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
+              sleep 1
+              if ! SIMCTL_CHILD_BS_MODE="$MODE" SIMCTL_CHILD_BS_SCREEN="$SCREEN" \
+                   xcrun simctl launch "$UDID" "$BUNDLE_ID" >/dev/null 2>&1; then
+                echo "::error::launch failed — $MODE/$SCREEN"
+                FAILED="$FAILED $MODE/$SCREEN"
+                continue
+              fi
+              sleep 4   # let the async MockBountyAPI load() settle before capture
+              xcrun simctl io "$UDID" screenshot "shots/${MODE}-${SCREEN}.png" >/dev/null 2>&1 \
+                || { echo "::error::screenshot failed — $MODE/$SCREEN"; FAILED="$FAILED $MODE/$SCREEN"; }
+            done
+          done
+
+          echo "--- captured ---"
+          ls -la shots | tail -30
+
+          CRASHES=$(ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i BountySounds || true)
+          if [ -n "$CRASHES" ]; then
+            echo "::error::the app crashed during the walkthrough"
+            echo "$CRASHES"
+            for f in ~/Library/Logs/DiagnosticReports/*BountySounds*; do
+              echo "===== $f"; head -60 "$f"
+            done
+            exit 1
+          fi
+          if [ -n "$FAILED" ]; then echo "::error::failed screens:$FAILED"; exit 1; fi
+          echo "all 24 launches clean, no crash reports"
+
+      - name: Upload screenshots (full-resolution PNG, App Store quality)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-screenshots-6.9
+          path: shots/
+          if-no-files-found: warn
+
+      # Also publish compressed copies to a disposable branch, so they can be
+      # viewed without downloading and unzipping an artifact.
+      - name: Publish previews to ci/screenshots
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          ls shots/*.png >/dev/null 2>&1 || { echo "nothing captured, skipping"; exit 0; }
+          mkdir -p /tmp/pv/shots
+          for f in shots/*.png; do
+            sips -s format jpeg -s formatOptions 70 -Z 900 "$f" \
+              --out "/tmp/pv/shots/$(basename "${f%.png}").jpg" >/dev/null
+          done
+          cd /tmp/pv
+          printf '# BountySounds simulator walkthrough\n\nCommit `%s`, %s, 6.9" (%s).\nFull-resolution PNGs are on the run as the `ios-screenshots-6.9` artifact.\n' \
+            "$GITHUB_SHA" "$(date -u +%FT%TZ)" "$DEVICE" > README.md
+          git init -q
+          git checkout -q -b ci/screenshots
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "screenshots for ${GITHUB_SHA:0:7}"
+          git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ci/screenshots
+          echo "pushed previews to branch ci/screenshots"

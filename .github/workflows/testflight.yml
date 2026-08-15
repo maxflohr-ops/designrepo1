@@ -1,0 +1,114 @@
+name: testflight
+
+# Manual only. This never runs on push — a TestFlight build should be a
+# decision, not a side effect of a commit. Run it from the Actions tab.
+on:
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: "What testers should know about this build"
+        required: false
+        default: "Internal build from the launch branch. Offline demo data; no live backend."
+
+jobs:
+  testflight:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      # Non-secret identifiers live in repo *variables*; only the .p8 is a secret.
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      ASC_KEY_ID: ${{ vars.APPSTORE_API_KEY_ID }}
+      ASC_ISSUER_ID: ${{ vars.APPSTORE_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s /Applications/Xcode_16.2.app || ls /Applications | grep Xcode
+
+      - name: Check required configuration
+        run: |
+          missing=""
+          [ -n "$APPLE_TEAM_ID" ]  || missing="$missing APPLE_TEAM_ID(var)"
+          [ -n "$ASC_KEY_ID" ]     || missing="$missing APPSTORE_API_KEY_ID(var)"
+          [ -n "$ASC_ISSUER_ID" ]  || missing="$missing APPSTORE_ISSUER_ID(var)"
+          [ -n "${{ secrets.APPSTORE_API_PRIVATE_KEY }}" ] || missing="$missing APPSTORE_API_PRIVATE_KEY(secret)"
+          if [ -n "$missing" ]; then
+            echo "::error::not configured yet — missing:$missing"
+            echo "See docs/testflight.md for where each of these comes from."
+            exit 1
+          fi
+          echo "configuration present"
+
+      - name: Stage the App Store Connect API key
+        env:
+          ASC_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          # xcodebuild wants the key on disk, in a directory it knows about.
+          mkdir -p ~/private_keys
+          printf '%s' "$ASC_PRIVATE_KEY" > ~/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          chmod 600 ~/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          echo "key staged (contents never printed)"
+
+      - name: Archive
+        run: |
+          set -o pipefail
+          # github.run_number gives a strictly increasing build number, which is
+          # what App Store Connect requires — it rejects a repeat.
+          xcodebuild archive \
+            -project ios/BountySounds.xcodeproj \
+            -scheme BountySounds \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/BountySounds.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            2>&1 | tee "$RUNNER_TEMP/archive.log"
+
+      - name: Export .ipa
+        run: |
+          set -o pipefail
+          # Substitute the team id into ExportOptions without committing it.
+          sed "s|\$(APPLE_TEAM_ID)|$APPLE_TEAM_ID|" ios/ExportOptions.plist > "$RUNNER_TEMP/ExportOptions.plist"
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/BountySounds.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            2>&1 | tee "$RUNNER_TEMP/export.log"
+          ls -la "$RUNNER_TEMP/export"
+
+      # MIT-licensed, by Itty Bitty Apps, hosted under the Apple-Actions org —
+      # widely used but NOT written by Apple. Pinned to v5 (latest v5.3.0);
+      # v4 -> v5 was dependency bumps only, inputs are byte-identical.
+      - name: Upload to TestFlight
+        uses: apple-actions/upload-testflight-build@v5
+        with:
+          app-path: ${{ runner.temp }}/export/BountySounds.ipa
+          app-type: ios
+          issuer-id: ${{ vars.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ vars.APPSTORE_API_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          release-notes: ${{ inputs.release_notes }}
+          # Declared in Info.plist as ITSAppUsesNonExemptEncryption = false.
+          uses-non-exempt-encryption: 'false'
+          wait-for-processing: 'true'
+
+      - name: Keep the archive for symbolication
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcarchive-${{ github.run_number }}
+          path: ${{ runner.temp }}/BountySounds.xcarchive
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Scrub the key
+        if: always()
+        run: rm -f ~/private_keys/*.p8
