@@ -112,11 +112,13 @@ first internal build — it exercises every screen with no backend, no Stripe, n
 TikTok. Point it at a real API later by setting that key, and only after the
 backend is deployed.
 
-**Nobody has watched this app run yet.** It compiles clean, and the fonts,
-assets and Info.plist all check out, but as of this writing no simulator has
-ever launched it. The walkthrough job in `ci.yml` is designed to answer exactly
-that, and it is cheaper to find a launch crash on a runner than after you have
-set up four Apple credentials. If you only do one of these first, do that one.
+**The app has now been watched running.** CI run #25 walked all 24
+screen/mode combinations on an iPhone 16 Pro Max simulator: every launch
+clean, no crash reports, and every screen matches the design prototype.
+Screenshots are on the run as the `ios-screenshots-6.9` artifact and, in
+compressed form, on the `ci/screenshots` branch. So the risk this section
+used to warn about is retired — the remaining unknown is a *physical device*,
+which is exactly what a TestFlight build gets you.
 
 ## Encryption declaration
 
