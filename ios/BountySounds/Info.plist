@@ -22,6 +22,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- HTTPS only, no bespoke cryptography: exempt under the EAR. Declaring
+	     it here stops App Store Connect asking on every TestFlight upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>BSAPIBaseURL</key>
 	<string></string>
 	<key>BSTikTokClientKey</key>
