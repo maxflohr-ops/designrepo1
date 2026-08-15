@@ -6,7 +6,7 @@ done in-session.
 
 ## Phase 0 — Foundations (done)
 
-- ✅ Backend: modular monolith, ledger, state machines, counting job, REST API (35 tests green)
+- ✅ Backend: modular monolith, ledger, state machines, counting job, REST API (54 tests green)
 - ✅ iOS app: all 11 screens, both modes, exact design tokens, mocked API
 - ✅ §8 business decisions resolved and encoded in config
 - ✅ CI: backend tests + iOS simulator build on every push (`.github/workflows/ci.yml`)
@@ -16,9 +16,9 @@ done in-session.
 
 ## Phase 1 — Accounts & approvals (you; start immediately, longest poles)
 
-- ⬜ **Apple Developer Program** — $99/yr. Enroll as an organization
-  (needs a D-U-N-S number, free but 1–2 weeks) or as an individual (1–2 days,
-  can migrate later). Blocks TestFlight and release.
+- ✅ **Apple Developer Program** — enrolled. Still to pull from it: the APNs
+  auth key (.p8), an App Store Connect API key for CI upload, and the app
+  record for `com.bountysounds.ios`.
 - 🔨 **TikTok for Developers app** — registered. Client key `awsr7oh3ikz2g2ay`
   is wired into the backend config and the app's Info.plist (it's a public
   identifier; the **client secret** is env-only — `TIKTOK_CLIENT_SECRET` —
@@ -40,10 +40,10 @@ done in-session.
   (PaymentIntent → webhook → live bounty → transfer → refund)
 - ✅ Stripe webhook **signature verification** — `Stripe-Signature` HMAC over
   the raw body; shared-secret fallback only outside live mode
-- ⬜ Stripe **PaymentSheet** in the iOS post-bounty flow (client secret is
-  already returned by `POST /v1/bounties`)
-- ⬜ Stripe **Express onboarding** link flow for clippers (payout method
-  screen → account link URL → store `payout_method_id`)
+- ✅ Stripe **PaymentSheet** in the iOS post-bounty and top-up flows
+  (stripe-ios via SPM; mock mode skips the payment step)
+- ✅ Stripe **Express onboarding** for clippers (`POST /v1/me/payout-account`
+  → hosted account link from the purse screen; `payout_method_id` stored)
 - 🔨 TikTok live client: token persistence + auto-refresh done; client key
   wired; still to verify OAuth + `video.query` against the approved app and
   confirm `music_id` coverage on the granted scopes (fallback: oEmbed check)
