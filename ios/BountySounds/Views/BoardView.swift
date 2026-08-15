@@ -142,28 +142,32 @@ struct ContractCard: View {
 
                 Spacer(minLength: 12)
 
-                Hairline()
-                MonoLabel(text: "Reward", size: 10, tracking: 0.2)
-                    .padding(.top, 13)
-                Text(bounty.rate)
-                    .font(.fredericka(21))
-                    .foregroundStyle(Color.ink)
-                    .padding(.top, 4)
-                HStack(spacing: 16) {
-                    Text(bounty.platform)
-                    Text("by \(bounty.deadline)")
-                    Text(bounty.slots)
+                // Grouped only to stay under ViewBuilder's 10-child limit;
+                // Group is layout-transparent, so the card is unchanged.
+                Group {
+                    Hairline()
+                    MonoLabel(text: "Reward", size: 10, tracking: 0.2)
+                        .padding(.top, 13)
+                    Text(bounty.rate)
+                        .font(.fredericka(21))
+                        .foregroundStyle(Color.ink)
+                        .padding(.top, 4)
+                    HStack(spacing: 16) {
+                        Text(bounty.platform)
+                        Text("by \(bounty.deadline)")
+                        Text(bounty.slots)
+                    }
+                    .font(.grotesk(12))
+                    .foregroundStyle(Color.muted)
+                    .padding(.top, 8)
+
+                    StampButton(title: "Open contract", minHeight: 48, action: open)
+                        .padding(.top, 14)
+
+                    MonoLabel(text: "swipe up · next contract", size: 9, tracking: 0.18)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 11)
                 }
-                .font(.grotesk(12))
-                .foregroundStyle(Color.muted)
-                .padding(.top, 8)
-
-                StampButton(title: "Open contract", minHeight: 48, action: open)
-                    .padding(.top, 14)
-
-                MonoLabel(text: "swipe up · next contract", size: 9, tracking: 0.18)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 11)
             }
             .padding(.vertical, 22)
             .padding(.horizontal, 20)
