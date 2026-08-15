@@ -94,6 +94,21 @@ struct ArtistSubmission: Identifiable, Equatable {
 
 enum Verdict: Equatable { case approved, disputed }
 
+// What TikTok will let this creator post — surfaced before composing, as the
+// Content Posting API requires. `directPostEnabled` is false until TikTok's
+// app audit clears, and the app keeps the paste-a-link path until it does.
+struct CreatorInfo: Equatable {
+    let nickname: String
+    let privacyOptions: [String]
+    let maxDurationSec: Int
+    let directPostEnabled: Bool
+}
+
+enum DirectPostOutcome: Equatable {
+    case processing
+    case posted(checksPassed: Bool)
+}
+
 enum PayoutModel: Int, CaseIterable {
     case perViews = 0, perClip = 1
     var label: String { self == .perViews ? "Per 100k views" : "Per clip" }

@@ -64,7 +64,7 @@ views verified via the TikTok Display API.
 |---|---|---|
 | Apple Developer team id; bundle id confirmation (`com.bountysounds.ios`) | signing, TestFlight | **enrolled** — ids pending |
 | App Store Connect API key (for CI upload), APNs auth key (.p8) | TestFlight automation, push | pending |
-| TikTok developer app: client key/secret, approved scopes (`user.info.basic`, `user.info.stats`, `video.list`), redirect URI | login + view counting | **not registered yet — owner action, chase this first, it's the critical path** |
+| TikTok developer app: **registered**, client key `awsr7oh3ikz2g2ay` wired in. Still needed: client **secret** (env `TIKTOK_CLIENT_SECRET`), approved Display API scopes, redirect URI, and — only for in-app posting — the Content Posting audit | login + view counting + direct post | key ✅ / scopes + secret pending (scope approval is still the critical path) |
 | Stripe: secret key (test first), webhook signing secret, Connect enabled | escrow + payouts | pending |
 | Hosting choice (default: Fly.io) + `api.bountysounds.com` DNS | production API | pending |
 

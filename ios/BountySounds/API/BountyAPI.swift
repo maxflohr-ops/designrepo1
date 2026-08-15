@@ -13,6 +13,10 @@ protocol BountyAPI: Sendable {
     func updateChecklist(bountyId: String, done: [Bool]) async throws
     func lodgeSubmission(bountyId: String, videoURL: String) async throws -> [SubmissionCheck]
     func fetchChecklistSteps() async throws -> [ChecklistStep]
+    // Content Posting API: publish the clip from inside the app so TikTok
+    // hands back the video id itself (nil creator info = not available).
+    func fetchCreatorInfo() async throws -> CreatorInfo?
+    func directPost(bountyId: String, video: Data, caption: String, privacyLevel: String) async throws -> DirectPostOutcome
     func fetchReviewing() async throws -> [ReviewingClaim]
     func fetchEvidence() async throws -> [EvidenceRow]
     func sendAppeal(statement: String) async throws

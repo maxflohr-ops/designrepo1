@@ -1,5 +1,9 @@
-import type { TikTokClient, TikTokProfile, TikTokVideo } from "./tiktok.js";
+import type {
+  DirectPostInit, DirectPostRequest, PublishStatus,
+  TikTokClient, TikTokCreatorInfo, TikTokProfile, TikTokVideo,
+} from "./tiktok.js";
 import { getTikTokTokens, saveTikTokTokens } from "../modules/identity/tokens.js";
+import { config } from "../config.js";
 
 // Production TikTok client over the Display API + Login Kit.
 //
@@ -19,7 +23,7 @@ import { getTikTokTokens, saveTikTokTokens } from "../modules/identity/tokens.js
 //    view_sample.source so counts can be re-derived (§5).
 export class LiveTikTok implements TikTokClient {
   constructor(
-    private clientKey = process.env.TIKTOK_CLIENT_KEY ?? "",
+    private clientKey = process.env.TIKTOK_CLIENT_KEY ?? config.tiktokClientKey,
     private clientSecret = process.env.TIKTOK_CLIENT_SECRET ?? "",
     // access-token lookup per video owner; defaults to the identity module's
     // token store with automatic refresh
@@ -147,5 +151,92 @@ export class LiveTikTok implements TikTokClient {
       viewCount: v.view_count ?? 0,
       postedAt: new Date((v.create_time ?? 0) * 1000),
     };
+  }
+
+  // -- Content Posting API ---------------------------------------------------
+  // Direct post from inside the app. This is the provenance fix: TikTok hands
+  // back the published video id, so a submission can never point at someone
+  // else's clip. Needs the video.publish scope; until the app passes TikTok's
+  // audit, posts are restricted to SELF_ONLY (private), which is useless for a
+  // views bounty — so the paste-a-link path stays the default until then.
+  //
+  // Shapes below follow TikTok's documented v2 contract; verify field names
+  // against the live docs on first integration (their status payload has
+  // historically shipped the published id under a misspelled key, so both
+  // spellings are accepted).
+
+  private async postApi(
+    path: string, accessToken: string, body: Record<string, unknown>,
+  ): Promise<Record<string, unknown> | null> {
+    const res = await fetch(`https://open.tiktokapis.com/v2/post/publish/${path}`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json; charset=UTF-8",
+      },
+      body: JSON.stringify(body),
+    });
+    const payload = (await res.json()) as {
+      data?: Record<string, unknown>;
+      error?: { code?: string; message?: string };
+    };
+    if (!res.ok || (payload.error?.code && payload.error.code !== "ok"))
+      throw new Error(`tiktok ${path}: ${payload.error?.code ?? res.status} — ${payload.error?.message ?? ""}`);
+    return payload.data ?? null;
+  }
+
+  async creatorInfo(openId: string): Promise<TikTokCreatorInfo | null> {
+    const token = await this.tokenFor!(openId);
+    if (!token) return null;
+    const data = await this.postApi("creator_info/query/", token, {});
+    if (!data) return null;
+    return {
+      nickname: (data.creator_nickname as string) ?? "",
+      privacyOptions: (data.privacy_level_options as string[]) ?? [],
+      maxVideoDurationSec: (data.max_video_post_duration_sec as number) ?? 0,
+      commentDisabled: (data.comment_disabled as boolean) ?? false,
+      duetDisabled: (data.duet_disabled as boolean) ?? false,
+      stitchDisabled: (data.stitch_disabled as boolean) ?? false,
+    };
+  }
+
+  async initDirectPost(openId: string, req: DirectPostRequest): Promise<DirectPostInit> {
+    const token = await this.tokenFor!(openId);
+    if (!token) throw new Error("no TikTok token for that account");
+    // One chunk: clips are short. Chunked upload matters for long-form only.
+    const data = await this.postApi("video/init/", token, {
+      post_info: {
+        title: req.caption,
+        privacy_level: req.privacyLevel,
+        disable_comment: req.disableComment ?? false,
+        disable_duet: req.disableDuet ?? false,
+        disable_stitch: req.disableStitch ?? false,
+      },
+      source_info: {
+        source: "FILE_UPLOAD",
+        video_size: req.videoSizeBytes,
+        chunk_size: req.videoSizeBytes,
+        total_chunk_count: 1,
+      },
+    });
+    return {
+      publishId: (data?.publish_id as string) ?? "",
+      uploadUrl: (data?.upload_url as string) ?? null,
+    };
+  }
+
+  async publishStatus(openId: string, publishId: string): Promise<PublishStatus> {
+    const token = await this.tokenFor!(openId);
+    if (!token) throw new Error("no TikTok token for that account");
+    const data = await this.postApi("status/fetch/", token, { publish_id: publishId });
+    const status = (data?.status as string) ?? "";
+    const videoId =
+      (data?.publicaly_available_post_id as string[] | undefined)?.[0] ??
+      (data?.publicly_available_post_id as string[] | undefined)?.[0] ??
+      null;
+    if (status === "PUBLISH_COMPLETE") return { state: "complete", videoId };
+    if (status === "FAILED")
+      return { state: "failed", videoId: null, failReason: (data?.fail_reason as string) ?? "unknown" };
+    return { state: "processing", videoId: null };
   }
 }

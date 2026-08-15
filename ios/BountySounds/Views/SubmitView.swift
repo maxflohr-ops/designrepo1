@@ -1,9 +1,14 @@
+import PhotosUI
 import SwiftUI
 
 // Screen 6 — numbered sections: camera-roll drop zone / TikTok link,
 // automatic checks list, payout preview. Lodge the submission.
+// The drop zone becomes a real picker once TikTok's content-posting audit
+// unlocks direct posting; until then it's the design's inert affordance and
+// the pasted link is the path.
 struct SubmitView: View {
     @EnvironmentObject var state: AppState
+    @State private var pickedVideo: PhotosPickerItem?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,7 +33,24 @@ struct SubmitView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     MonoLabel(text: "1 · The post", size: 9.5, tracking: 0.2)
-                    dropZone.padding(.top, 10)
+                    if state.canPostFromApp {
+                        PhotosPicker(selection: $pickedVideo, matching: .videos) {
+                            dropZone
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(state.isPosting)
+                        .padding(.top, 10)
+                        .onChange(of: pickedVideo) { _, item in
+                            guard let item else { return }
+                            Task {
+                                if let data = try? await item.loadTransferable(type: Data.self) {
+                                    state.postDirectly(video: data, caption: state.current?.title ?? "")
+                                }
+                            }
+                        }
+                    } else {
+                        dropZone.padding(.top, 10)
+                    }
                     Text("https://tiktok.com/@merrow/video/74…")
                         .font(.mono(12.5))
                         .foregroundStyle(Color.ink)

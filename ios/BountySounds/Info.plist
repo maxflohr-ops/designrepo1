@@ -25,7 +25,7 @@
 	<key>BSAPIBaseURL</key>
 	<string></string>
 	<key>BSTikTokClientKey</key>
-	<string></string>
+	<string>awsr7oh3ikz2g2ay</string>
 	<key>BSTikTokRedirectURI</key>
 	<string></string>
 	<key>CFBundleURLTypes</key>

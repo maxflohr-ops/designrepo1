@@ -156,6 +156,52 @@ struct LiveBountyAPI: BountyAPI {
         try await fallback.fetchChecklistSteps() // product copy
     }
 
+    // MARK: direct post
+
+    func fetchCreatorInfo() async throws -> CreatorInfo? {
+        let body = try json(try await request("GET", "v1/me/tiktok/creator-info"))
+        guard let creator = body["creator"] as? [String: Any] else { return nil }
+        return CreatorInfo(
+            nickname: creator["nickname"] as? String ?? "",
+            privacyOptions: creator["privacyOptions"] as? [String] ?? [],
+            maxDurationSec: creator["maxVideoDurationSec"] as? Int ?? 0,
+            directPostEnabled: body["directPostEnabled"] as? Bool ?? false
+        )
+    }
+
+    // init → PUT the bytes straight to TikTok → poll until it's live. The
+    // video never touches our servers.
+    func directPost(bountyId: String, video: Data, caption: String, privacyLevel: String) async throws -> DirectPostOutcome {
+        guard let claimId = try await claimId(forBounty: bountyId) else {
+            throw APIError.http(404, Data())
+        }
+        let start = try json(try await request(
+            "POST", "v1/claims/\(claimId)/direct-post",
+            body: ["caption": caption, "privacyLevel": privacyLevel, "videoSizeBytes": video.count],
+            idempotent: true))
+        if let uploadURLString = start["uploadUrl"] as? String,
+           let uploadURL = URL(string: uploadURLString) {
+            var put = URLRequest(url: uploadURL)
+            put.httpMethod = "PUT"
+            put.setValue("video/mp4", forHTTPHeaderField: "Content-Type")
+            put.setValue("bytes 0-\(video.count - 1)/\(video.count)", forHTTPHeaderField: "Content-Range")
+            let (_, response) = try await URLSession.shared.upload(for: put, from: video)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                throw APIError.http((response as? HTTPURLResponse)?.statusCode ?? 0, Data())
+            }
+        }
+        // TikTok encodes asynchronously; poll while it does.
+        for _ in 0..<40 {
+            let status = try json(try await request("POST", "v1/claims/\(claimId)/direct-post/status"))
+            if status["state"] as? String == "posted" {
+                let state = (status["submission"] as? [String: Any])?["state"] as? String
+                return .posted(checksPassed: state == "counting")
+            }
+            try await Task.sleep(for: .seconds(3))
+        }
+        return .processing
+    }
+
     func fetchReviewing() async throws -> [ReviewingClaim] {
         let body = try json(try await request("GET", "v1/me/claims"))
         var out: [ReviewingClaim] = []

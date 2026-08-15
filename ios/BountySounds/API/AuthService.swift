@@ -15,7 +15,7 @@ final class TikTokAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         var comps = URLComponents(string: "https://www.tiktok.com/v2/auth/authorize/")!
         comps.queryItems = [
             URLQueryItem(name: "client_key", value: clientKey),
-            URLQueryItem(name: "scope", value: "user.info.basic,user.info.stats,video.list"),
+            URLQueryItem(name: "scope", value: "user.info.basic,user.info.stats,video.list,video.publish"),
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "redirect_uri", value: AppConfig.oauthRedirectURI),
             URLQueryItem(name: "state", value: UUID().uuidString),

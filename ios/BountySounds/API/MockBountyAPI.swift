@@ -65,6 +65,16 @@ struct MockBountyAPI: BountyAPI {
         ]
     }
 
+    // Offline demo: posting from the app stays dark until TikTok's audit.
+    func fetchCreatorInfo() async throws -> CreatorInfo? {
+        CreatorInfo(nickname: "merrowcuts", privacyOptions: ["PUBLIC_TO_EVERYONE"],
+                    maxDurationSec: 600, directPostEnabled: false)
+    }
+
+    func directPost(bountyId: String, video: Data, caption: String, privacyLevel: String) async throws -> DirectPostOutcome {
+        .posted(checksPassed: true)
+    }
+
     func fetchReviewing() async throws -> [ReviewingClaim] {
         [
             ReviewingClaim(id: "r1", title: "Hook challenge — new single",

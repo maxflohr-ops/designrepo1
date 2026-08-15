@@ -135,8 +135,16 @@ export class BountyService {
     return rows[0];
   }
 
-  // POST /v1/claims/:id/submission — lodge the link; the four checks run synchronously.
-  async createSubmission(accountId: string, claimId: string, tiktokVideoId: string) {
+  // POST /v1/claims/:id/submission — lodge the link; the four checks run
+  // synchronously. `directPost` means TikTok itself handed us this video id
+  // after publishing it under the clipper's own token: provenance is certain,
+  // but the Display API may not have indexed the video yet, so the sound check
+  // defers to the counting job (which already refuses to accrue on a
+  // music-id mismatch) instead of hard-rejecting on a lag.
+  async createSubmission(
+    accountId: string, claimId: string, tiktokVideoId: string,
+    opts: { directPost?: boolean } = {},
+  ) {
     const { rows: [claimRow] } = await pool.query(
       `select claim.*, bounty.sound_id, bounty.platform, bounty.window_days, bounty.state as bounty_state,
               bounty.payout_model, bounty.rate_cents, bounty.id as b_id
@@ -150,19 +158,26 @@ export class BountyService {
       "select * from sound where id = $1", [claimRow.sound_id]);
     const video = await this.tiktok.getVideo(tiktokVideoId);
 
-    // The four automatic checks (Submit screen §2).
-    const checks = {
-      sound_match: !!video && video.musicId === sound.tiktok_music_id,
-      posted_in_window: !!video && video.postedAt >= new Date(claimRow.claimed_at)
-        && video.postedAt <= new Date(claimRow.expires_at),
-      handle_verified: !!video && video.authorOpenId === acct.tiktok_open_id,
+    // The four automatic checks (Submit screen §2). A check is `null` when it
+    // can't be decided yet — only false fails the submission.
+    const pending = opts.directPost && !video;
+    const checks: Record<string, boolean | null> = {
+      sound_match: pending ? null : !!video && video.musicId === sound.tiktok_music_id,
+      posted_in_window: opts.directPost
+        ? true // published through our own flow, seconds ago
+        : !!video && video.postedAt >= new Date(claimRow.claimed_at)
+          && video.postedAt <= new Date(claimRow.expires_at),
+      handle_verified: opts.directPost
+        ? true // TikTok published it under this clipper's token
+        : !!video && video.authorOpenId === acct.tiktok_open_id,
       duplicate_clear: true,
     };
     const { rows: [dupe] } = await pool.query(
       "select 1 from submission where tiktok_video_id = $1 and state not in ('void','rejected')", [tiktokVideoId]);
     if (dupe) checks.duplicate_clear = false;
+    if (opts.directPost) checks.direct_post = true;
 
-    const passed = Object.values(checks).every(Boolean);
+    const passed = Object.values(checks).every((v) => v !== false);
     return withTxn(async (c) => {
       const windowEnds = new Date(video ? video.postedAt : new Date());
       windowEnds.setDate(windowEnds.getDate() + claimRow.window_days);
@@ -183,6 +198,62 @@ export class BountyService {
       }
       return { submission: { ...sub, state: "counting" }, checks };
     });
+  }
+
+  // -- Content Posting API: post the clip from inside the app ----------------
+  // Provenance fix: TikTok publishes under the clipper's own token and hands
+  // back the video id, so a submission can't point at someone else's clip.
+  // Gated behind config.directPostEnabled until TikTok's audit passes (before
+  // that, posts are forced SELF_ONLY, which can't earn views).
+
+  async creatorInfo(accountId: string) {
+    const { rows: [acct] } = await pool.query("select * from account where id = $1", [accountId]);
+    if (!acct) throw new ApiError(401, "unauthenticated", "no account");
+    const info = await this.tiktok.creatorInfo(acct.tiktok_open_id);
+    if (!info) throw new ApiError(409, "tiktok_unlinked", "reconnect TikTok to post from here");
+    return { creator: info, directPostEnabled: config.directPostEnabled };
+  }
+
+  async startDirectPost(
+    accountId: string, claimId: string,
+    req: { caption: string; privacyLevel: string; videoSizeBytes: number },
+  ) {
+    if (!config.directPostEnabled)
+      throw new ApiError(403, "direct_post_disabled", "posting from the app isn't open yet");
+    const { rows: [claim] } = await pool.query(
+      "select * from claim where id = $1 and account_id = $2", [claimId, accountId]);
+    if (!claim) throw new ApiError(404, "not_found", "claim not found");
+    if (claim.state !== "open") throw new ApiError(409, "bad_state", `claim is ${claim.state}`);
+    if (req.videoSizeBytes <= 0) throw new ApiError(422, "bad_size", "videoSizeBytes required");
+    const { rows: [acct] } = await pool.query("select * from account where id = $1", [accountId]);
+
+    const init = await this.tiktok.initDirectPost(acct.tiktok_open_id, {
+      caption: req.caption,
+      privacyLevel: req.privacyLevel,
+      videoSizeBytes: req.videoSizeBytes,
+    });
+    await pool.query("update claim set tiktok_publish_id = $2 where id = $1", [claimId, init.publishId]);
+    return init;
+  }
+
+  // Poll the publish; once TikTok reports it live, lodge the submission with
+  // the video id it returned. Same submission path as a pasted link, so the
+  // state machine, counting job, and ledger are untouched.
+  async finishDirectPost(accountId: string, claimId: string) {
+    const { rows: [claim] } = await pool.query(
+      "select * from claim where id = $1 and account_id = $2", [claimId, accountId]);
+    if (!claim) throw new ApiError(404, "not_found", "claim not found");
+    if (!claim.tiktok_publish_id) throw new ApiError(409, "no_publish", "nothing posting for this claim");
+    const { rows: [acct] } = await pool.query("select * from account where id = $1", [accountId]);
+
+    const status = await this.tiktok.publishStatus(acct.tiktok_open_id, claim.tiktok_publish_id);
+    if (status.state === "processing") return { state: "processing" as const };
+    if (status.state === "failed" || !status.videoId) {
+      await pool.query("update claim set tiktok_publish_id = null where id = $1", [claimId]);
+      throw new ApiError(422, "publish_failed", status.failReason ?? "TikTok couldn't publish that clip");
+    }
+    const out = await this.createSubmission(accountId, claimId, status.videoId, { directPost: true });
+    return { state: "posted" as const, ...out };
   }
 
   // The §4 invariant lives here: reserves + paid-out never exceed the funded

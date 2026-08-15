@@ -191,6 +191,38 @@ export function buildServer(deps: Deps) {
     return { claim: await bounties.patchChecklist(me.id, id, checklist) };
   });
 
+  // -- direct post (Content Posting API) --------------------------------------
+
+  // What TikTok will let this creator do — privacy options, duration cap, and
+  // interaction toggles. TikTok requires these be shown before composing.
+  app.get("/v1/me/tiktok/creator-info", async (req) => {
+    const me = await auth(req);
+    return bounties.creatorInfo(me.id);
+  });
+
+  // Start a publish: returns the upload URL the app PUTs the file to.
+  app.post("/v1/claims/:id/direct-post", async (req, reply) => {
+    const me = await auth(req);
+    const { id } = req.params as { id: string };
+    const b = (req.body ?? {}) as { caption?: string; privacyLevel?: string; videoSizeBytes?: number };
+    if (!b.privacyLevel) throw new ApiError(422, "privacy_required", "pick a privacy level");
+    await withIdempotency(req, reply, me.id, async () => ({
+      status: 201,
+      body: await bounties.startDirectPost(me.id, id, {
+        caption: b.caption ?? "",
+        privacyLevel: b.privacyLevel!,
+        videoSizeBytes: Number(b.videoSizeBytes ?? 0),
+      }),
+    }));
+  });
+
+  // Poll until TikTok reports the post live, then lodge the submission.
+  app.post("/v1/claims/:id/direct-post/status", async (req) => {
+    const me = await auth(req);
+    const { id } = req.params as { id: string };
+    return bounties.finishDirectPost(me.id, id);
+  });
+
   app.post("/v1/claims/:id/submission", async (req, reply) => {
     const me = await auth(req);
     const { id } = req.params as { id: string };

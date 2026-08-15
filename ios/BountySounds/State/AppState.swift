@@ -42,6 +42,8 @@ final class AppState: ObservableObject {
     @Published var roster: [RosterRow] = []
     @Published var settings: [SettingRow] = []
     @Published var artistSubmissions: [ArtistSubmission] = []
+    @Published var creatorInfo: CreatorInfo?
+    @Published var isPosting = false
 
     private var toastTask: Task<Void, Never>?
 
@@ -74,6 +76,7 @@ final class AppState: ObservableObject {
             roster = try await api.fetchRoster()
             settings = try await api.fetchSettings()
             artistSubmissions = try await api.fetchArtistSubmissions()
+            creatorInfo = try? await api.fetchCreatorInfo()
         } catch {
             flash("Could not reach the board. Pull to retry.")
         }
@@ -230,6 +233,35 @@ final class AppState: ObservableObject {
 
     func finishSubmit() {
         flash("Submission lodged. Views start counting at post time.", goTo: .claims)
+    }
+
+    var canPostFromApp: Bool { creatorInfo?.directPostEnabled == true }
+
+    // Publish straight to TikTok: the video id comes back from TikTok itself,
+    // so the claim can't be pointed at someone else's clip.
+    func postDirectly(video: Data, caption: String) {
+        guard let bounty = current, !isPosting else { return }
+        isPosting = true
+        Task {
+            defer { isPosting = false }
+            do {
+                let privacy = creatorInfo?.privacyOptions.first(where: { $0 == "PUBLIC_TO_EVERYONE" })
+                    ?? creatorInfo?.privacyOptions.first ?? "PUBLIC_TO_EVERYONE"
+                switch try await api.directPost(
+                    bountyId: bounty.id, video: video, caption: caption, privacyLevel: privacy) {
+                case .processing:
+                    flash("TikTok is still processing the post. We'll lodge it when it lands.")
+                case .posted(let checksPassed):
+                    if checksPassed {
+                        flash("Posted and lodged. Views start counting now.", goTo: .claims)
+                    } else {
+                        flash("Posted, but the audio isn't the contract's sound — that won't pay.")
+                    }
+                }
+            } catch {
+                flash("TikTok wouldn't take that post. Try again, or paste the link instead.")
+            }
+        }
     }
 
     func sendAppeal() {

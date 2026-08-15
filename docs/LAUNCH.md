@@ -19,12 +19,15 @@ done in-session.
 - ⬜ **Apple Developer Program** — $99/yr. Enroll as an organization
   (needs a D-U-N-S number, free but 1–2 weeks) or as an individual (1–2 days,
   can migrate later). Blocks TestFlight and release.
-- ⬜ **TikTok for Developers app** — free. Register at developers.tiktok.com,
-  request **Login Kit** + **Display API** scopes (`user.info.basic`,
-  `user.info.stats`, `video.list`). App review takes days–weeks. **This is the
-  single biggest schedule risk**: view counting depends on it. Submit early;
-  the use case ("creators authorize us to read their own video view counts")
-  is squarely what the Display API is for.
+- 🔨 **TikTok for Developers app** — registered. Client key `awsr7oh3ikz2g2ay`
+  is wired into the backend config and the app's Info.plist (it's a public
+  identifier; the **client secret** is env-only — `TIKTOK_CLIENT_SECRET` —
+  and must never be committed). Still needed from TikTok:
+  - **Display API scopes** approved (`user.info.basic`, `user.info.stats`,
+    `video.list`) — view counting depends on these; still the critical path.
+  - **Content Posting audit** (`video.publish`) if we want in-app posting to
+    produce public videos. Unaudited, TikTok forces posts to SELF_ONLY, which
+    can't earn views — so direct post ships dark (`TIKTOK_DIRECT_POST=1`).
 - ⬜ **Stripe account + Connect** — free to open, days to activate. Enable
   Connect (Express accounts for clippers), turn on payouts, complete platform
   profile. Stripe handles KYC, money transmission, and 1099s — this is what
@@ -41,9 +44,16 @@ done in-session.
   already returned by `POST /v1/bounties`)
 - ⬜ Stripe **Express onboarding** link flow for clippers (payout method
   screen → account link URL → store `payout_method_id`)
-- 🔨 TikTok live client: token persistence + auto-refresh in the identity
-  module done; still to verify OAuth + `video.query` against the approved app
-  and confirm `music_id` scope coverage (fallback: oEmbed check)
+- 🔨 TikTok live client: token persistence + auto-refresh done; client key
+  wired; still to verify OAuth + `video.query` against the approved app and
+  confirm `music_id` coverage on the granted scopes (fallback: oEmbed check)
+- 🔨 **Direct post (Content Posting API)** built end to end — creator_info,
+  video/init, upload, status poll, and submission lodged from the video id
+  TikTok returns. Gated off until the audit passes. **Open product question:
+  a FILE_UPLOAD post only satisfies the sound check if TikTok links the
+  uploaded audio back to the contract's `music_id`; when it doesn't, the
+  submission is rejected at lodge time (Terms rule 01 — a re-upload doesn't
+  count). Verify this behavior against a real post before relying on it.**
 - ✅ TikTok Login Kit in the iOS onboarding (ASWebAuthenticationSession →
   backend https callback → app scheme → `POST /v1/auth/tiktok`); live mode
   only — the offline design demo is untouched

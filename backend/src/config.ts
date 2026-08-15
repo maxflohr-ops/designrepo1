@@ -28,6 +28,17 @@ export const config = {
   claimWindowDays: 6,
   appealSlaHours: 72,
 
+  // TikTok app identity. The client key is a public identifier (like an OAuth
+  // client id) and ships in the app too; the secret is env-only, never here.
+  tiktokClientKey: "awsr7oh3ikz2g2ay",
+  // Scopes requested at login. video.publish unlocks direct posting; TikTok
+  // restricts posts to SELF_ONLY until the app passes their audit, so the
+  // paste-a-link submission path remains the default until then.
+  tiktokScopes: "user.info.basic,user.info.stats,video.list,video.publish",
+  // Flip on once TikTok's content-posting audit passes and public posts are
+  // allowed — until then the app hides the direct-post path.
+  directPostEnabled: process.env.TIKTOK_DIRECT_POST === "1",
+
   // counting job
   pollBudgetPerRun: Number(process.env.POLL_BUDGET_PER_RUN ?? 500),
   spikeMinSamples: 10,
