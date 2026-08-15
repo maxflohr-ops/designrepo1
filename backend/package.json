@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Bounty Sounds backend \u2014 modular monolith (identity, bounties, counting, treasury, notify)",
+  "description": "Bounty Sounds backend — modular monolith (identity, bounties, counting, treasury, notify)",
   "scripts": {
     "build": "tsc",
     "migrate": "tsx src/bin/migrate.ts",
@@ -14,6 +14,7 @@
     "seed:demo": "tsx scripts/seed-demo.ts"
   },
   "dependencies": {
+    "@sentry/node": "^10.70.0",
     "fastify": "^5.2.0",
     "ioredis": "^5.4.2",
     "pg": "^8.13.1"
