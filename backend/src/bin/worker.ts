@@ -1,3 +1,4 @@
+import { Sentry, sentryEnabled } from "../observability/instrument.js"; // must come first
 import { migrate } from "../db.js";
 import { BountyService } from "../modules/bounties/service.js";
 import { CountingService } from "../modules/counting/service.js";
@@ -18,6 +19,7 @@ const tick = async () => {
     if (expired || polled.length) console.log(`tick: ${expired} claims expired, ${polled.length} polls`);
   } catch (err) {
     console.error("worker tick failed", err);
+    if (sentryEnabled) Sentry.captureException(err);
   }
 };
 await tick();
