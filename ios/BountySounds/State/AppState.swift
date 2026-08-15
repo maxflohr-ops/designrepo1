@@ -297,7 +297,7 @@ final class AppState: ObservableObject {
 
     func openPayoutOnboarding() {
         Task {
-            if let url = try? await api.payoutOnboardingLink(), let url {
+            if let url = try? await api.payoutOnboardingLink() {
                 await UIApplication.shared.open(url)
             } else {
                 flash("Payout methods are managed in live mode.")
