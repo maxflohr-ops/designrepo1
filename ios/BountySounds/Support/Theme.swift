@@ -22,15 +22,26 @@ extension Color {
     }
 }
 
+// Global type-scale multiplier. Every call site in this app still passes the
+// original design-handoff sizes (e.g. .grotesk(14)) — this scales the actual
+// rendered point size uniformly across every font family, so the type
+// hierarchy from the handoff is preserved (headline stays N points bigger
+// than body, labels stay smallest) while every screen reads bigger. Added
+// after real-device feedback that the type read too small throughout.
+// Tune this one number rather than touching call sites.
+enum TypeScale {
+    static let factor: CGFloat = 1.15
+}
+
 // Typography: Fredericka the Great (display), Source Serif 4 (wordmark/card
 // titles), Space Grotesk (UI body, buttons), Space Mono (labels, serials, tab
 // bar), Permanent Marker (rare marginalia).
 extension Font {
-    static func fredericka(_ size: CGFloat) -> Font { .custom("FrederickatheGreat-Regular", size: size) }
-    static func marker(_ size: CGFloat) -> Font { .custom("PermanentMarker-Regular", size: size) }
+    static func fredericka(_ size: CGFloat) -> Font { .custom("FrederickatheGreat-Regular", size: size * TypeScale.factor) }
+    static func marker(_ size: CGFloat) -> Font { .custom("PermanentMarker-Regular", size: size * TypeScale.factor) }
 
     static func serif(_ size: CGFloat, _ weight: SerifWeight = .semibold) -> Font {
-        .custom(weight.postScript, size: size)
+        .custom(weight.postScript, size: size * TypeScale.factor)
     }
     enum SerifWeight { case regular, semibold, bold
         var postScript: String {
@@ -43,7 +54,7 @@ extension Font {
     }
 
     static func grotesk(_ size: CGFloat, _ weight: GroteskWeight = .regular) -> Font {
-        .custom(weight.postScript, size: size)
+        .custom(weight.postScript, size: size * TypeScale.factor)
     }
     enum GroteskWeight { case regular, medium, semibold, bold
         var postScript: String {
@@ -57,7 +68,7 @@ extension Font {
     }
 
     static func mono(_ size: CGFloat, bold: Bool = false) -> Font {
-        .custom(bold ? "SpaceMono-Bold" : "SpaceMono-Regular", size: size)
+        .custom(bold ? "SpaceMono-Bold" : "SpaceMono-Regular", size: size * TypeScale.factor)
     }
 }
 
@@ -72,7 +83,10 @@ struct MonoLabel: View {
     var body: some View {
         Text(text.uppercased())
             .font(.mono(size, bold: bold))
-            .tracking(size * tracking)
+            // Tracking is an em value (fraction of point size); scale it by
+            // the same TypeScale.factor as the font so letter-spacing stays
+            // proportional to the now-larger rendered size.
+            .tracking(size * tracking * TypeScale.factor)
             .foregroundStyle(color)
     }
 }
@@ -91,7 +105,7 @@ struct StampButton: View {
         Button(action: action) {
             Text(title.uppercased())
                 .font(.grotesk(fontSize, .semibold))
-                .tracking(fontSize * 0.09)
+                .tracking(fontSize * 0.09 * TypeScale.factor)
                 .foregroundStyle(textColor)
                 .frame(maxWidth: .infinity, minHeight: minHeight)
         }
