@@ -85,33 +85,12 @@ Work top to bottom; A and B need no owner inputs at all.
    minimal; don't regenerate the project unless it's genuinely broken.
 3. Done when: both CI jobs green on the branch.
 
-### B. Backend production wiring (no external accounts needed)
-1. **Stripe webhook signatures**: replace the `x-webhook-secret` header check
-   in `src/api/server.ts` with real `Stripe-Signature` verification
-   (HMAC-SHA256 over `t.payload` per Stripe's scheme — implement with
-   node:crypto, no SDK; keep the shared-secret path for `GATEWAYS=fake`).
-   Test with synthetic signed payloads.
-2. **TikTok token persistence**: `LiveTikTok` needs `tokenFor(openId)`.
-   Add `tiktok_token` table (open_id PK, access_token, refresh_token,
-   expires_at, scopes) + refresh logic in the identity module; wire
-   `makeGateways()` to pass a pool-backed `tokenFor`. Extend
-   `exchangeCode` to persist tokens. Tests with the stub.
-3. **Roster endpoint**: `GET /v1/roster` — rank accounts by paid-out cents
-   (`payout_clear` credits) over a rolling 90 days; include rank, handle,
-   paid views (sum of countable deltas), bounty count, and an `isYou` flag.
-   Then implement `fetchRoster()` in `LiveBountyAPI` against it.
-4. **App Attest verification endpoint**: `POST /v1/me/attest` accepting an
-   App Attest key id + assertion; store verified key ids per account; make
-   `POST /v1/me/payouts` accept assertions from a registered key (keep the
-   current header check as the `GATEWAYS=fake` path). Full CBOR validation
-   can start minimal (structure + rp id hash) with a TODO for cert-chain
-   pinning; the design goal is the interface, so the iOS side can build.
-5. **Rate limiting**: Redis token bucket on `/v1/auth/tiktok` (per IP) and
-   `POST /v1/bounties/:id/claims` (per account). Tests.
-6. **Health endpoint** `GET /healthz` (DB + Redis ping) for the host's checks.
-7. Done when: suite green with new tests covering each of the above.
+### B. DONE — do not rebuild
+Stripe webhook signature verification, the TikTok token store with refresh,
+`GET /v1/roster`, the App Attest key registry + payout gating, Redis rate
+limits on auth and claims, and `GET /healthz` are all implemented with tests.
 
-### C–E. DONE — do not rebuild
+### C–E. DONE — do not rebuild (iOS auth, payments, push)
 TikTok Login Kit + Keychain sessions, the mock/live switch, Stripe
 PaymentSheet + Express payout onboarding, Face ID + App Attest cash-out,
 the APNs sender, the ops webhook, the demo seed, the app icon, empty states,
