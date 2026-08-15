@@ -19,17 +19,21 @@ views verified via the TikTok Display API.
   zero-sum trigger); the invariant *reserves + payouts ≤ funded purse* is
   enforced in `BountyService.reserveCapped` inside the accrual transaction.
   Counting job polls on a decaying cadence with anomaly rules. Full REST API
-  with mandatory `Idempotency-Key` on mutations. **35 integration tests, all
+  with mandatory `Idempotency-Key` on mutations. **54 integration tests, all
   green** (`npm test` with `DATABASE_URL`/`REDIS_URL` set; CI does this).
   Stripe and TikTok sit behind interfaces in `src/gateways/` — fakes by
   default, production impls in `stripeLive.ts` / `tiktokLive.ts`, selected by
-  `GATEWAYS=live`.
-- `ios/` — **visually complete** SwiftUI app (iOS 17+, Xcode 16 project,
-  no dependencies). All 11 screens in clipper + artist modes on fixture data
-  via `MockBountyAPI`; `LiveBountyAPI` (URLSession, idempotency keys) exists
-  but is not yet wired in. **The app has never been compiled** — this repo
-  was authored in a Linux container; the `ios-build` CI job on a macOS runner
-  is the build gate.
+  `GATEWAYS=live`. Also done: Stripe signature verification, Express payout
+  accounts, TikTok token store + refresh, roster, App Attest registry, rate
+  limits, `/healthz`, APNs sender, ops webhook, demo seed, direct post.
+- `ios/` — **feature-complete but NEVER COMPILED** SwiftUI app (iOS 17+,
+  Xcode 16 project; one dependency, stripe-ios via SPM). All 11 screens in
+  clipper + artist modes. `MockBountyAPI` drives an offline demo by default;
+  setting `BSAPIBaseURL` in Info.plist swaps in `LiveBountyAPI` (TikTok
+  login, Keychain session, PaymentSheet, Express onboarding, Face ID +
+  App Attest cash-out, direct post, empty/error states, app icon).
+  **Everything Swift was authored in a Linux container with no compiler —
+  getting it to build is job #1.**
 - `docs/LAUNCH.md` — phased checklist (this brief supersedes it where they
   differ). `docs/appstore/metadata.md`, `docs/legal/privacy-policy.md` — drafts.
 - CI: `.github/workflows/ci.yml`. Deploy: `backend/Dockerfile`,
@@ -107,37 +111,13 @@ Work top to bottom; A and B need no owner inputs at all.
 6. **Health endpoint** `GET /healthz` (DB + Redis ping) for the host's checks.
 7. Done when: suite green with new tests covering each of the above.
 
-### C. iOS auth + live mode (needs TikTok keys to test, build it before they arrive)
-1. TikTok Login Kit: `ASWebAuthenticationSession` from the onboarding CTAs →
-   authorize URL → callback code → `POST /v1/auth/tiktok` → store the session
-   token in Keychain (small Keychain helper, no dependency).
-2. Build-config switch: Debug → `MockBountyAPI`; a `LIVE_API` xcconfig flag +
-   base URL → `LiveBountyAPI`. Logout clears Keychain and returns to onboarding.
-3. Session restore on launch; 401 → onboarding.
-4. Done when: app compiles in CI in both configurations; mock flow unchanged.
-
-### D. iOS payments (needs Stripe test keys to verify)
-1. Add `stripe-ios` via SPM (PaymentSheet only).
-2. Post-bounty flow: `POST /v1/bounties` → client secret → PaymentSheet →
-   on success show the existing "Purse funded" toast; bounty goes live via
-   webhook (test-mode webhook against the deployed backend or stripe-cli).
-3. Top-up button → same flow via `POST /v1/bounties/:id/topups`.
-4. Payout method screen: `POST /v1/me/payout-account` (new backend endpoint
-   producing a Stripe Express account-link URL) → open in
-   `SFSafariViewController` → store `payout_method_id` on return.
-5. Cash out: Face ID via LocalAuthentication + App Attest assertion (from B4)
-   replacing the placeholder header in `LiveBountyAPI.cashOut`.
-6. Done when: full money loop runs in Stripe test mode: fund → live →
-   claim → submit → poll (stub counts) → approve → cash out.
-
-### E. Push notifications (needs APNs key)
-1. Backend: token-based APNs (JWT ES256 via node:crypto, HTTP/2 to
-   `api.push.apple.com`) replacing the `sendPush` stub in
-   `src/modules/notify/service.ts`; env `APNS_KEY_ID`, `APNS_TEAM_ID`,
-   `APNS_KEY_P8`, `APNS_BUNDLE_ID`.
-2. iOS: notification permission prompt after first claim (not at launch),
-   registration → `POST /v1/me/push-tokens`.
-3. Done when: a wire event produces a push on a TestFlight build.
+### C–E. DONE — do not rebuild
+TikTok Login Kit + Keychain sessions, the mock/live switch, Stripe
+PaymentSheet + Express payout onboarding, Face ID + App Attest cash-out,
+the APNs sender, the ops webhook, the demo seed, the app icon, empty states,
+error surfaces, and the TikTok direct-post path are all implemented and
+committed. Read the code before touching any of it. What remains on these is
+*verification against real services*, which needs the owner's keys.
 
 ### F. Deploy (needs hosting + DNS decisions)
 1. Fly.io (or owner's choice): two processes from `backend/Dockerfile`
@@ -176,8 +156,10 @@ Work top to bottom; A and B need no owner inputs at all.
 
 ## Owner-only actions (surface these to Max, don't wait silently)
 
-- Register the TikTok developer app + request scopes (**do this first — it
-  gates counting and is the schedule's critical path**).
+- TikTok: app is registered (key `awsr7oh3ikz2g2ay` already wired). Still
+  needed — **Display API scope approval** (the critical path for counting),
+  the client **secret** into the host's secret store, and the redirect URI.
+  The Content Posting audit is optional and only unlocks in-app posting.
 - Activate Stripe + Connect; create webhook endpoint + share test keys.
 - App Store Connect: create the app record for `com.bountysounds.ios`, ASC
   API key, APNs key.
