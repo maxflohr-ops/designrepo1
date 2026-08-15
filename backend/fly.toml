@@ -1,0 +1,75 @@
+# Bounty Sounds production API + counting worker.
+#
+#   fly deploy -c backend/fly.toml
+#
+# Two process groups off ONE image (backend/Dockerfile):
+#   api    — Fastify, the only group behind the public proxy
+#   worker — claim expiry + the TikTok counting pass, no inbound traffic
+#
+# Migrations run once per deploy via release_command, before either group
+# starts. Both entrypoints also call migrate() at boot, which is idempotent —
+# that stays as a safety net for a machine restarted outside a deploy.
+
+app = "bounty-sounds-api"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  release_command = "node dist/src/bin/migrate.js"
+  strategy = "rolling"
+
+[processes]
+  api = "node dist/src/bin/server.js"
+  worker = "node dist/src/bin/worker.js"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3000"
+  # Live Stripe + TikTok gateways. Never set this outside production.
+  GATEWAYS = "live"
+  PUBLIC_WEB_URL = "https://bountysounds.com"
+  APNS_HOST = "api.push.apple.com"
+  APNS_BUNDLE_ID = "com.bountysounds.ios"
+  # Direct posting stays off until TikTok's content-posting audit clears.
+  TIKTOK_DIRECT_POST = "0"
+  # Counting budget per worker pass; raise only after watching for 429s.
+  POLL_BUDGET_PER_RUN = "500"
+  SENTRY_ENVIRONMENT = "production"
+  SENTRY_TRACES_SAMPLE_RATE = "0.1"
+
+# Public HTTP — api group only. The worker gets no [http_service], so Fly
+# never routes traffic to it.
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false      # the ledger's API should not cold-start
+  auto_start_machines = true
+  min_machines_running = 2        # two machines = survives a single host loss
+  processes = ["api"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+  # Fly's own health check. This is what gates a rolling deploy: a machine
+  # that can't answer /healthz never takes traffic.
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "15s"
+    timeout = "5s"
+    method = "GET"
+    path = "/healthz"
+
+# The worker has no service, so it needs its own liveness signal.
+[[vm]]
+  processes = ["api"]
+  size = "shared-cpu-2x"
+  memory = "1gb"
+
+[[vm]]
+  processes = ["worker"]
+  size = "shared-cpu-1x"
+  memory = "512mb"
