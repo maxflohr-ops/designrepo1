@@ -121,7 +121,7 @@ jobs:
           mkdir -p shots
           FAILED=""
           for MODE in clipper artist; do
-            for SCREEN in onboard board detail claims dispute submit purse alerts me roster post review; do
+            for SCREEN in onboard board detail claims dispute submit purse alerts me roster post review stage; do
               xcrun simctl terminate "$UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
               sleep 1
               if ! SIMCTL_CHILD_BS_MODE="$MODE" SIMCTL_CHILD_BS_SCREEN="$SCREEN" \

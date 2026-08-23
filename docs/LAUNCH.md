@@ -100,6 +100,10 @@ done in-session.
   `docs/appstore/metadata.md`). Key points for review: payouts are for
   real-world creative work (not digital content → external payments are
   allowed, no IAP required); TikTok login is an established third-party OAuth.
+  **Amend this note if the Stage ships:** skins *are* digital content and go
+  through In-App Purchase, so the app would carry both — payouts outside IAP,
+  skins inside it. Reviewers read the mix as a red flag unless the note draws
+  the line first.
 
 ## Phase 6 — Beta → Live (1–2 weeks)
 
@@ -110,6 +114,31 @@ done in-session.
   window (or accept a shortened pilot window)
 - ⬜ App Store submission (expect one rejection round on a money app — budget it)
 - ⬜ Launch bounty lined up (Ridge Club purse funded before the board is public)
+
+## Phase 7 — The Stage & skins (prototyped, not launch-blocking)
+
+Split screen: a skin above, the bounty's clip feed below. Analysis and the
+constraints that shaped it are in `docs/skins/FEASIBILITY.md` — read §3 and §4
+before touching the feed source or the telemetry, they are the two places this
+design can go wrong legally.
+
+- ✅ Stage shell, draggable split, skin switcher (`ios/BountySounds/Views/StageView.swift`)
+- ✅ Three skins — Tally (free), Cookbook ($1), Lyric Sheet ($1) (`ios/BountySounds/Skins/`)
+- ✅ StoreKit 2 unlocks, restore, localized pricing (`Support/Entitlements.swift`)
+- ✅ Bounty-scoped clip feed over TikTok's official embed player (`Views/ClipFeedView.swift`)
+- ✅ Attention event schema + client recorder (`Support/Attention.swift`)
+- ✅ Privacy policy updated for Stage telemetry and skin purchases
+- ⬜ **Backend `attention` module** — `POST /v1/attention/batch`, aggregation
+  job, n ≥ 50 suppression floor. Nothing server-side exists; the client drops
+  its batches in mock builds and posts into the void in configured ones.
+- ⬜ **Artist-facing attention report** — the actual business case in §5, with
+  no screen yet
+- ⬜ **Server-side receipt validation** for skin purchases (client-trusted today)
+- ⬜ **App Store Connect products** — `com.bountysounds.skin.cookbook`,
+  `com.bountysounds.skin.lyrics`, non-consumable, Tier 1
+- ⬜ **Embed player `onStateChange`** via postMessage, to replace the dwell-time
+  proxy currently standing in for clip completion
+- ⬜ **Counsel review of the feed scope** before it ships
 
 ## Deferred (post-launch, by design)
 

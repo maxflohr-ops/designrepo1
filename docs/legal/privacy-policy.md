@@ -19,6 +19,15 @@ Bounty Sounds iOS app and API.
   privacy policy: https://stripe.com/privacy.
 - **Device data:** a push token if you enable notifications, and device
   attestation results (Apple App Attest) when you cash out.
+- **Stage activity, not tied to you:** when you use the Stage (the split
+  screen with a skin above the clip feed), we record which skin was running,
+  how long each clip held the screen, where you set the split, and which
+  in-skin controls you pressed. These records carry a random session id that
+  is regenerated every time you open the Stage and is never stored against
+  your account, your TikTok open id, or your device. They contain no video,
+  no text you typed, and no TikTok data.
+- **Skin purchases:** handled entirely by Apple's In-App Purchase. We see
+  which skins you own; we never see your payment details.
 
 ## What we use it for
 
@@ -28,10 +37,24 @@ account-age floors), dispute resolution (we keep every view sample so a
 disputed count can be re-derived), tax reporting where required (via Stripe),
 and legal compliance.
 
+## Aggregate reporting to artists
+
+We publish attention reports to the artists who fund bounties — for example,
+how long clips on their sound held the screen, broken down by which skin was
+running. These reports are built only from the Stage records above, are
+aggregated across many sessions, and are suppressed entirely below 50 sessions
+per figure so no individual session can be picked out. Artists never receive
+per-user or per-session data, and nothing derived from TikTok's APIs goes into
+them.
+
 ## What we don't do
 
-We don't sell your data. We don't run third-party ads or ad tracking. We
-don't host your videos — they stay on TikTok.
+We don't sell your data — not your account data, not your bounty activity, and
+not your Stage activity. The artist reports described above are aggregate
+statistics, not personal information, and we do not license, share, or
+transfer any TikTok data we read on your behalf to anyone. We don't run
+third-party ads or ad tracking. We don't host your videos — they stay on
+TikTok.
 
 ## Sharing
 
