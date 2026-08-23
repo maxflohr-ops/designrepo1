@@ -1,5 +1,16 @@
 import SwiftUI
 
+// Split bounds. Below ~0.30 the skin is unusable; above ~0.62 the clip stops
+// reading as video and starts reading as a thumbnail. Kept out of StageModel
+// so `init`'s default argument doesn't reach into main-actor-isolated state
+// from a nonisolated context.
+enum StageSplit {
+    static let minRatio = 0.30
+    static let maxRatio = 0.62
+    static let defaultRatio = 0.46
+    static let range = minRatio...maxRatio
+}
+
 // The Stage: a bounty's clip feed on the bottom, a skin on top, one split.
 // Owns the feed cursor, the split ratio, and the dwell accounting that feeds
 // AttentionRecorder — the skin views read this and never talk to the API.
@@ -12,24 +23,18 @@ final class StageModel: ObservableObject {
     @Published var loading = true
     @Published var marked: Set<String> = []
 
-    // Split bounds. Below ~0.3 the skin is unusable; above ~0.62 the clip stops
-    // reading as video and starts reading as a thumbnail.
-    static let minRatio = 0.30
-    static let maxRatio = 0.62
-    static let defaultRatio = 0.46
-
     let bounty: Bounty?
     private let api: BountyAPI
     private let attention: AttentionRecorder
     private var clipStart = Date()
 
     init(bounty: Bounty?, api: BountyAPI, attention: AttentionRecorder,
-         skinID: String = "tally", splitRatio: Double = StageModel.defaultRatio) {
+         skinID: String = "tally", splitRatio: Double = StageSplit.defaultRatio) {
         self.bounty = bounty
         self.api = api
         self.attention = attention
         self.skinID = skinID
-        self.splitRatio = splitRatio.clamped(to: StageModel.minRatio...StageModel.maxRatio)
+        self.splitRatio = splitRatio.clamped(to: StageSplit.range)
     }
 
     var current: StageClip? { clips.indices.contains(index) ? clips[index] : nil }
@@ -50,7 +55,7 @@ final class StageModel: ObservableObject {
     }
 
     func setRatio(_ ratio: Double) {
-        let clamped = ratio.clamped(to: StageModel.minRatio...StageModel.maxRatio)
+        let clamped = ratio.clamped(to: StageSplit.range)
         guard abs(clamped - splitRatio) > 0.001 else { return }
         splitRatio = clamped
     }

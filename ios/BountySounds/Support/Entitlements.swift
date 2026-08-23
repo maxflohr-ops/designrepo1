@@ -10,7 +10,7 @@ import SwiftUI
 // instrument, not a revenue line — the money is the artist-side attention
 // report. Don't let the catalog grow on the assumption it pays for itself.
 //
-// Not yet done (§6): server-side receipt validation. `Transaction`'s own
+// Not yet done (§6): server-side receipt validation. StoreKit's own
 // verification is trusted here, which a jailbroken device can defeat.
 @MainActor
 final class EntitlementStore: ObservableObject {
@@ -28,7 +28,7 @@ final class EntitlementStore: ObservableObject {
 
     init() {
         updatesTask = Task { [weak self] in
-            for await update in Transaction.updates {
+            for await update in StoreKit.Transaction.updates {
                 guard case .verified(let transaction) = update else { continue }
                 self?.apply(transaction)
                 await transaction.finish()
@@ -62,7 +62,7 @@ final class EntitlementStore: ObservableObject {
 
     func refreshEntitlements() async {
         var found: Set<String> = []
-        for await entitlement in Transaction.currentEntitlements {
+        for await entitlement in StoreKit.Transaction.currentEntitlements {
             guard case .verified(let transaction) = entitlement else { continue }
             if transaction.revocationDate == nil { found.insert(transaction.productID) }
         }
@@ -110,7 +110,7 @@ final class EntitlementStore: ObservableObject {
         await refreshEntitlements()
     }
 
-    private func apply(_ transaction: Transaction) {
+    private func apply(_ transaction: StoreKit.Transaction) {
         if transaction.revocationDate == nil {
             owned.insert(transaction.productID)
         } else {
