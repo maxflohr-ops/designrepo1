@@ -114,3 +114,24 @@ enum PayoutModel: Int, CaseIterable {
     var label: String { self == .perViews ? "Per 100k views" : "Per clip" }
     var rateLabel: String { self == .perViews ? "$5 / 5,000 views" : "$20 / approved clip" }
 }
+
+// A clip in the Stage feed. Bounty-scoped and first-party: every one of these
+// was submitted to a contract by a clipper who connected their TikTok account,
+// which is what keeps the feed clear of Developer Terms §III.3(p) — it's a
+// review surface for our own marketplace, not a replica of the For-You page.
+// See docs/skins/FEASIBILITY.md §3.
+struct StageClip: Identifiable, Equatable {
+    let id: String          // our submission id
+    let videoID: String     // TikTok video id — drives the embed player URL
+    let handle: String
+    let serial: String
+    let views: String
+
+    // Official embed player, unmodified, one post per frame. Chrome is hidden
+    // through documented query parameters only.
+    var embedURL: URL? {
+        URL(string: "https://www.tiktok.com/player/v1/\(videoID)"
+            + "?autoplay=0&controls=0&progress_bar=0&description=0"
+            + "&music_info=0&rel=0&native_context_menu=0&closed_caption=0")
+    }
+}

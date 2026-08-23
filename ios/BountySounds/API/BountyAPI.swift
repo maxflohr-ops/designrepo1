@@ -8,6 +8,8 @@ protocol BountyAPI: Sendable {
     func fetchBoard() async throws -> [Bounty]
     func fetchCaptured(bountyId: String) async throws -> [CapturedClip]
     func fetchContractRules(bountyId: String) async throws -> [String]
+    // Bounty-scoped clip feed for the Stage (see docs/skins/FEASIBILITY.md §3).
+    func fetchStageClips(bountyId: String) async throws -> [StageClip]
 
     func claimBounty(id: String) async throws
     func updateChecklist(bountyId: String, done: [Bool]) async throws

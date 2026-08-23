@@ -229,6 +229,16 @@ struct BountyDetailView: View {
             .padding(.horizontal, 18)
             .padding(.top, 14)
             .padding(.bottom, 8)
+
+            // Secondary: scout the contract before claiming it. The Stage is
+            // the same captured clips as the detail table, played back with a
+            // skin running above them.
+            StampButton(title: "Scout the stage", fill: .clear, textColor: .ink,
+                        minHeight: 44, fontSize: 12) {
+                state.openStage()
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 10)
         }
         .background(Color.paper)
     }

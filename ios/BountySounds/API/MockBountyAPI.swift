@@ -34,6 +34,24 @@ struct MockBountyAPI: BountyAPI {
         ]
     }
 
+    // Stage feed fixtures. The video ids are placeholders — ClipFeedView only
+    // reaches for the real embed player in a configured build, so the offline
+    // demo never depends on these resolving.
+    func fetchStageClips(bountyId: String) async throws -> [StageClip] {
+        [
+            StageClip(id: "c1", videoID: "7231338487075638570", handle: "merrowcuts",
+                      serial: "B 141 \u{00B7} 01", views: "412k"),
+            StageClip(id: "c2", videoID: "7231338487075638571", handle: "halfstep",
+                      serial: "B 141 \u{00B7} 02", views: "88k"),
+            StageClip(id: "c3", videoID: "7231338487075638572", handle: "novaedits",
+                      serial: "B 141 \u{00B7} 03", views: "1.2m"),
+            StageClip(id: "c4", videoID: "7231338487075638573", handle: "quietfrog",
+                      serial: "B 141 \u{00B7} 04", views: "56k"),
+            StageClip(id: "c5", videoID: "7231338487075638574", handle: "ridgeclubfan",
+                      serial: "B 141 \u{00B7} 05", views: "203k"),
+        ]
+    }
+
     func fetchContractRules(bountyId: String) async throws -> [String] {
         [
             "Use the listed sound. A re-upload of the audio does not count.",

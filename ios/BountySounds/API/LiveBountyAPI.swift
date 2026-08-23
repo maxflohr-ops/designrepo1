@@ -100,6 +100,25 @@ struct LiveBountyAPI: BountyAPI {
         }
     }
 
+    // Reuses the bounty detail payload — the Stage feed is the same captured
+    // submissions, rendered as an embed pager instead of a table. Clips whose
+    // TikTok video id we never resolved are skipped rather than shown broken.
+    func fetchStageClips(bountyId: String) async throws -> [StageClip] {
+        let body = try json(try await request("GET", "v1/bounties/\(bountyId)"))
+        let rows = body["captured"] as? [[String: Any]] ?? []
+        let clips: [StageClip] = rows.enumerated().compactMap { index, r in
+            guard let videoID = r["tiktok_video_id"] as? String, !videoID.isEmpty else { return nil }
+            return StageClip(
+                id: r["id"] as? String ?? videoID,
+                videoID: videoID,
+                handle: r["handle"] as? String ?? "",
+                serial: String(format: "%@ %02d", bountyId.uppercased(), index + 1),
+                views: "\(((r["views"] as? Int ?? 0) / 1000))k"
+            )
+        }
+        return clips
+    }
+
     // Contract terms are product copy, not server data.
     func fetchContractRules(bountyId: String) async throws -> [String] {
         try await fallback.fetchContractRules(bountyId: bountyId)

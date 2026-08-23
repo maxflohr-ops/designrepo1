@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 enum Screen: Equatable {
-    case onboard, board, detail, claims, dispute, submit, purse, alerts, me, roster, post, review
+    case onboard, board, detail, claims, dispute, submit, purse, alerts, me, roster, post, review, stage
 }
 
 #if DEBUG
@@ -22,6 +22,7 @@ extension Screen {
         case "roster": self = .roster
         case "post": self = .post
         case "review": self = .review
+        case "stage": self = .stage
         default: return nil
         }
     }
@@ -37,6 +38,9 @@ enum Mode { case clipper, artist }
 final class AppState: ObservableObject {
     private(set) var api: BountyAPI
     private let tiktokAuth = TikTokAuth()
+    // Stage attention telemetry. Lives on AppState so one recorder spans
+    // every stage session; StageModel owns the per-session id inside it.
+    let attention = AttentionRecorder()
     @Published var isAuthenticating = false
 
     @Published var screen: Screen = .onboard
@@ -202,6 +206,13 @@ final class AppState: ObservableObject {
         bountyIndex = index
         detailPage = 0
         screen = .detail
+    }
+
+    // The Stage runs full-height — no tab bar (see `showTabs`), because the
+    // split is already two panes deep and a third strip makes both unusable.
+    func openStage() {
+        guard current != nil else { return }
+        screen = .stage
     }
 
     func seize() {

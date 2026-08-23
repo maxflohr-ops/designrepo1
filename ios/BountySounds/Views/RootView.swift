@@ -38,6 +38,13 @@ struct RootView: View {
         case .roster: RosterView()
         case .post: PostBountyView()
         case .review: ReviewView()
+        case .stage:
+            // Keyed on the bounty so the Stage rebuilds if the board loads
+            // underneath it (the CI harness opens .stage before load()
+            // finishes); the normal entry from the detail screen already
+            // has `current` set, so the key never changes there.
+            StageView(bounty: state.current, api: state.api, attention: state.attention)
+                .id(state.current?.id)
         }
     }
 }
